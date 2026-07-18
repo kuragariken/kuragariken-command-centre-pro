@@ -1,0 +1,118 @@
+============================================================
+  COMMAND CENTRE PRO — ADMIN / IT UPDATE GUIDE
+============================================================
+
+HOW UPDATES WORK
+----------------
+Users only have CommandCentrePro.exe on their machine.
+All user data lives in:
+
+  C:\Users\<Username>\AppData\Roaming\Command Centre Pro\
+                                     (i.e. %APPDATA%\Command Centre Pro\)
+
+Updates ONLY replace the .exe file. The data folder is
+never touched, deleted, or modified by the update process.
+
+
+WHAT YOU NEED TO DISTRIBUTE AN UPDATE
+--------------------------------------
+1. Build the new exe using BUILD.bat (requires Python on
+   your build machine — users do NOT need Python).
+
+2. Host the new CommandCentrePro.exe somewhere users can
+   download it. Options:
+     · Company SharePoint / Teams Files
+     · Internal file share (\\server\share\CCP\)
+     · OneDrive shared link
+     · Any direct download URL
+
+3. Send users the UPDATE.bat file (included in this pack)
+   along with the download URL.
+
+
+STEP-BY-STEP FOR USERS
+------------------------
+Give users these simple instructions:
+
+  1. Copy UPDATE.bat into the same folder as your
+     CommandCentrePro.exe
+
+  2. Double-click UPDATE.bat
+
+  3. When prompted, paste in the download URL provided
+     by IT and press Enter
+
+  4. The updater will:
+       ✓ Close the app if it is running
+       ✓ Back up your current exe (timestamped)
+       ✓ Download the new exe
+       ✓ Replace the old exe automatically
+       ✓ Offer to relaunch the app
+
+  5. Your commands, vault, settings and all data are
+     completely untouched.
+
+
+SILENT / SCRIPTED UPDATE (IT MANAGED)
+--------------------------------------
+If you want to push updates silently via GPO, SCCM,
+Intune, or a login script, use this PowerShell approach:
+
+  # Run as the user (NOT as SYSTEM — so you get their %APPDATA%)
+  $ExePath  = "C:\Path\To\CommandCentrePro.exe"
+  $NewExe   = "\\server\share\CCP\CommandCentrePro_latest.exe"
+  $Backup   = "$ExePath.bak"
+
+  # Close if running
+  Stop-Process -Name "CommandCentrePro" -Force -ErrorAction SilentlyContinue
+  Start-Sleep -Seconds 2
+
+  # Back up
+  Copy-Item $ExePath $Backup -Force
+
+  # Replace
+  Copy-Item $NewExe $ExePath -Force
+
+  Write-Host "Update complete. Data untouched in $env:APPDATA\Command Centre Pro\"
+
+
+WHAT DATA IS SAFE DURING UPDATES
+----------------------------------
+The following are NEVER affected by exe replacement:
+
+  %APPDATA%\Command Centre Pro\CommandCentre.json
+    → All commands, categories, settings, analytics,
+      reminders, macros, vault entries, notes, tickets.
+
+  %APPDATA%\Command Centre Pro\CommandCentre_Backups\
+    → Rolling auto-backups (up to 5 kept).
+
+  %APPDATA%\Command Centre Pro\CommandCentre_session.log
+    → Copy session log.
+
+
+ROLLBACK
+---------
+If a user reports issues after an update:
+
+  1. The UPDATE.bat automatically saves a timestamped
+     backup of the previous exe in the same folder, e.g.:
+       CommandCentrePro_backup_20260624_143022.exe
+
+  2. Tell the user to rename it back to
+     CommandCentrePro.exe (after closing the app).
+
+  3. Their data is unchanged — rollback is instant.
+
+
+BUILD REQUIREMENTS (for the person building new versions)
+----------------------------------------------------------
+  · Windows 10/11 (64-bit)
+  · Python 3.10+ (install from python.org)
+  · Run BUILD.bat — it installs all dependencies
+    automatically and produces dist\CommandCentrePro.exe
+
+  Dependencies installed automatically by BUILD.bat:
+    PyQt6 · pyautogui · pyinstaller · cryptography
+
+============================================================

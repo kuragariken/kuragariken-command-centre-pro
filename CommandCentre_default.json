@@ -1,0 +1,161 @@
+{
+  "categories": [
+    "GRAFANA",
+    "Missings",
+    "Monitoring",
+    "PW",
+    "SQL Stuff",
+    "Tills Duty"
+  ],
+  "commands": {
+    "GRAFANA": [],
+    "Missings": [
+      {
+        "label": "COMMAND",
+        "text": "java -cp /beanstore/libs/V21server.jar:/beanstore/libs/V21pos.jar:/beanstore/libs/V21inf.jar:/beanstore/libs/V21da_bls.jar:/beanstore/libs/V21common.jar uk.co.datafit.beanstore.util.ListTransactionLog -listall -tlog transaction.log.0",
+        "notes": "",
+        "tags": "",
+        "priority": "NORMAL"
+      }
+    ],
+    "Monitoring": [
+      {
+        "label": "RESET PASSWORD",
+        "text": "Good Day\n\nPassword Reset to 0000\n\nPlease retry in 15-20mins",
+        "notes": "",
+        "tags": "",
+        "priority": "NORMAL"
+      }
+    ],
+    "PW": [
+      {
+        "label": "GUI",
+        "text": "C0c0p!n3L00p!3J8645!!!",
+        "notes": "",
+        "tags": "",
+        "priority": "NORMAL"
+      }
+    ],
+    "SQL Stuff": [],
+    "Tills Duty": [
+      {
+        "label": "MAIN SCRIPT",
+        "text": "bash -c 'echo -e \"\\e[1;34m========== POS UNIT HEALTH CHECK ==========\\e[0m\"; echo -e \"\\e[1;33mHOSTNAME:\\e[0m $(hostname)\"; echo -e \"\\e[1;33mDATE:\\e[0m $(date)\"; echo -e \"\\e[1;34m===========================================\\e[0m\"; echo -e \"\n\\e[1;36m=== CPU LOAD ===\\e[0m\"; uptime; echo -e \"\n\\e[1;36m=== MEMORY USAGE ===\\e[0m\"; free -h; echo -e \"\n\\e[1;36m=== MEMORY STATUS ===\\e[0m\"; read total used <<<$(free | awk '\\''/Mem:/ {print $2, $3}'\\''); usage=$(( used * 100 / total )); if (( usage > 80 )); then echo -e \"\\e[1;31mRAM USAGE: $usage% - BAD (High Memory Usage)\\e[0m\"; else echo -e \"\\e[1;32mRAM USAGE: $usage% - GOOD\\e[0m\"; fi; echo -e \"\n\\e[1;36m=== DISK USAGE ===\\e[0m\"; df -h /; used_disk=$(df / | awk '\\''NR==2 {print $5}'\\'' | tr -d '\\''%'\\''); if (( used_disk > 90 )); then echo -e \"\\e[1;31mDISK USAGE: $used_disk% - BAD (Low Disk Space)\\e[0m\"; else echo -e \"\\e[1;32mDISK USAGE: $used_disk% - GOOD\\e[0m\"; fi; echo -e \"\n\\e[1;36m=== NETWORK STATUS ===\\e[0m\"; ip a; IP=$(ip -4 addr show eth0 | grep -oP '\\''(?<=inet\\s)\\d+(\\.\\d+){3}'\\''); echo -e \"\\e[1;33mCHECKING LATENCY:\\e[0m $IP\"; PING_OUTPUT=$(ping -c 4 \"$IP\"); if echo \"$PING_OUTPUT\" | grep -q '\\''time='\\''; then AVG_PING_MS=$(echo \"$PING_OUTPUT\" | tail -1 | awk -F '\\''/'\\'' '\\''{print $5}'\\''); if (( ${AVG_PING_MS%.*} > 100 )); then echo -e \"\\e[1;31mHIGH PING ALERT: Average ping to $IP is ${AVG_PING_MS} ms\\e[0m\"; else echo -e \"\\e[1;32mSERVER PING ($IP): OK (Avg ${AVG_PING_MS} ms)\\e[0m\"; fi; else echo -e \"\\e[1;31mSERVER PING ($IP): FAIL\\e[0m\"; fi; echo -e \"\n\\e[1;36m=== USB DEVICES ===\\e[0m\"; lsusb; echo -e \"\n\\e[1;36m=== RECENT SYSTEM ERRORS ===\\e[0m\"; journalctl -p 3 -xb | tail -n 20; while true; do echo -e \"\n\\e[1;35m=== OPTIONAL CHECKS MENU ===\\e[0m\"; echo \"1. Legacy (Global Debug log scraper)\"; echo \"2. Run EFT/DB2 Cache Database Checks\"; echo \"3. Check for Native Method Errors\"; echo \"4. View POS Restart Count Info\"; echo \"5. Run Fix Scripts\"; echo \"6. Drive Serial & Bad Sectors\"; echo \"7. Check DNS\"; echo \"8. Check Calibration Status\"; echo \"9. DISABLE/DISABLE POS(RESTART INCLUDED)\"; echo \"10.Transaction Finder\"; echo \"0. Exit Optional Checks\"; read -rp \"Select an option: \" opt_choice; case $opt_choice in 1) echo -e \"\n\\e[1;36m=== POS ERRLOGS CRITICAL ERRORS ===\\e[0m\"; grep --color=always -iE -C 25 '\\''Fatal|DeviceException|JposException'\\'' /beanstore/PosErrlogs/global.debug.log || echo -e \"\\e[1;33mNo matching errors found.\\e[0m\" ;; 2) echo -e \"\n\\e[1;36m=== CACHE DB2 CHECKS ===\\e[0m\"; su - db2inst1 -c '\\''db2 connect to esp ; sleep 2; db2 \"select count(*) from ESP_CARDS\"'\\''; su - db2inst1 -c '\\''db2 connect to cache1'\\''; su - db2inst1 -c '\\''db2 connect to cache2'\\'' ;; 3) echo -e \"\n\\e[1;36m=== NATIVE METHOD ERRORS ===\\e[0m\"; grep -i '\\''NativeMethodAccessorImpl'\\'' /beanstore/PosErrlogs/global.debug.log || echo -e \"\\e[1;33mNo native method errors found.\\e[0m\" ;; 4) while true; do echo -e \"\n\\e[1;36mReboot Info Options:\\e[0m\"; echo \"0. Back\"; echo \"1. Restart count (excluding 5am)\"; echo \"2. Restart count (including 5am)\"; read -rp \"Select option: \" reboot_choice; case $reboot_choice in 0) break ;; 1) strings /beanstore/tlog/posHistory.log | grep re | tail -n 14 | grep -v \" 05:\" ;; 2) strings /beanstore/tlog/posHistory.log | grep re | tail -n 14 ;; *) echo -e \"\\e[1;33mInvalid input.\\e[0m\" ;; esac; done ;; 5) while true; do echo -e \"\n\\e[1;36mSelect a fix:\\e[0m\"; echo \"0. Back\"; echo \"1. ManualPatchUpgrade.sh\"; echo \"2. rebuildPOS.sh\"; echo \"3. triggerCalibration.sh\"; echo \"4. rebootPOS.sh\"; read -rp \"Option: \" fix_choice; case $fix_choice in 0) break ;; 1) bash /home/pos/bin/ManualPatchUpgrade.sh; break ;; 2) bash /home/pos/bin/rebuildPOS.sh; break ;; 3) bash /home/pos/bin/triggerCalibration.sh ;; 4) bash /home/pos/bin/rebootPOS.sh; break ;; *) echo -e \"\\e[1;33mInvalid input.\\e[0m\" ;; esac; done ;; 6) echo -e \"\n\\e[1;36m=== DRIVE CHECK ===\\e[0m\"; hdparm -i /dev/sda | grep -i '\\''SerialNo'\\''; echo -e \"\nCurrent Errors:\"; grep sda /var/log/messages | grep -i error || echo \"None\"; echo -e \"\nArchived Errors:\"; zgrep sda /var/log/messages* | grep -i error || echo \"None\" ;; 7) echo -e \"\n\\e[1;33mChecking DNS...\\e[0m\"; cat /etc/resolv.conf; ping -c 4 google.com ;; 8) echo -e \"\n\\e[1;33mChecking Calibration Status...\\e[0m\"; echo -e \"\n\\e[1;36m=== INPUT DRIVER STATUS ===\\e[0m\"; DRIVER_OUTPUT=$(grep -i \"Using input driver\" /var/log/Xorg.0.log); if [[ -n \"$DRIVER_OUTPUT\" ]]; then echo -e \"\\e[1;32mINPUT DRIVERS DETECTED:\\e[0m\"; echo \"$DRIVER_OUTPUT\"; else echo -e \"\\e[1;31mUNABLE TO DETERMINE INPUT DRIVERS\\e[0m\"; fi; echo -e \"\n\\e[1;36m=== CALIBRATION ERRORS ===\\e[0m\"; grep -iE \"device removed|removing device|disconnect|fail|error|reset|calibration|axis|coordinate|out of range\" /var/log/Xorg.0.log /var/log/Xorg.0.log.old || echo -e \"\\e[1;32mNo calibration-related errors found.\\e[0m\" ;; 9) choice=\"\"; while [[ \"$choice\" != \"1\" && \"$choice\" != \"2\" ]]; do echo -e \"\n\\e[1;33mChoose an option:\\e[0m\"; echo \"1. DISABLE POS\"; echo \"2. ENABLE POS\"; read -rp \"Option: \" choice; if [[ \"$choice\" != \"1\" && \"$choice\" != \"2\" ]]; then echo -e \"\\e[1;33mInvalid input. Please enter 1 or 2.\\e[0m\"; fi; done; if [[ \"$choice\" == \"1\" ]]; then echo -e \"\n\\e[1;31mDISABLING POS...\\e[0m\"; mv /beanstore/pos/launcher.sh /beanstore/pos/Xlauncher.sh; echo -e \"\\e[1;31mPOS DISABLED. RESTARTING APPLICATION...\\e[0m\"; else echo -e \"\n\\e[1;32mENABLING POS...\\e[0m\"; mv /beanstore/pos/Xlauncher.sh /beanstore/pos/launcher.sh; echo -e \"\\e[1;32mPOS ENABLED. REBOOTING...\\e[0m\"; rsb; fi ;; 10) echo -e \"\\e[1;34m========== TRANSACTION SEARCH ==========\\e[0m\"; read -p \"Enter transaction number: \" txn; read -p \"Enter date (YYYY-MM-DD) or press Enter for today: \" date; if [ -z \"$date\" ]; then logfile=\"/beanstore/PosErrlogs/global.debug.log\"; else logfile=\"/beanstore/PosErrlogs/global.debug.log.$date\"; fi; outfile=\"/tmp/${txn}.log\"; if [ ! -f \"$logfile\" ]; then echo -e \"\\e[1;31m? Log file not found: $logfile\\e[0m\"; exit 1; fi; echo -e \"\n\\e[1;33m?? Searching in:\\e[0m $logfile\"; echo -e \"\\e[1;34m=======================================\\e[0m\"; grep -C 8 \"<txnNumber>$txn</txnNumber>\" \"$logfile\" > \"$outfile\"; if [ ! -s \"$outfile\" ]; then echo -e \"\\e[1;31m? No transaction found!\\e[0m\"; rm -f \"$outfile\"; exit 1; fi; store=$(grep -m1 \"<storeCode>\" \"$outfile\" | sed -E '\\''s/.*<storeCode>(.*)</storeCode>.*/\\1/'\\'' ); till=$(grep -m1 \"<till>\" \"$outfile\" | sed -E '\\''s/.*<till>(.*)</till>.*/\\1/'\\'' ); operator=$(grep -m1 \"<operatorCode\" \"$outfile\" | sed -E '\\''s/.*name=\"([^\"]+)\".*/\\1/'\\'' ); status=$(grep -m1 \"<event type=\" \"$outfile\" | sed -E '\\''s/.*type=\"([^\"]+)\".*/\\1/'\\'' ); echo -e \"\n\\e[1;36m?? TRANSACTION SUMMARY\\e[0m\"; echo -e \"\\e[1;37m---------------------------------------\\e[0m\"; echo -e \"Store     : \\e[1;32m${store:-N/A}\\e[0m\"; echo -e \"Till      : \\e[1;32m${till:-N/A}\\e[0m\"; echo -e \"Operator  : \\e[1;32m${operator:-N/A}\\e[0m\"; echo -e \"Status    : \\e[1;32m${status:-N/A}\\e[0m\"; echo -e \"\\e[1;37m---------------------------------------\\e[0m\"; timestamps=$(grep \"<POSEventMessage>\" -B1 \"$outfile\" | grep -E \"^[0-9]{4}-\" | awk '\\''{print $1\" \"$2}'\\''); echo -e \"\n\\e[1;35m?? TIME GAP ANALYSIS\\e[0m\"; prev_time=\"\"; while read -r line; do current_epoch=$(date -d \"$line\" +%s 2>/dev/null); if [ -n \"$prev_time\" ]; then diff=$((current_epoch - prev_time)); if [ $diff -gt 360 ]; then echo -e \"\\e[1;31m?? Gap detected: $((diff/60)) minutes between transactions at $line\\e[0m\"; fi; fi; prev_time=$current_epoch; done <<< \"$timestamps\"; echo -e \"\n\\e[1;32m?? TRANSACTION LOG\\e[0m\n\"; grep --color=always -C 10 \"<txnNumber>$txn</txnNumber>\" \"$logfile\" | sed \"s/<txnNumber>$txn</txnNumber>/\\x1b[1;41m&\\x1b[0m/g\"; echo -e \"\n\\e[1;34m?? Output saved to:\\e[0m $outfile\" ;; 0) echo -e \"\\e[1;32mExiting.\\e[0m\"; break ;; *) echo -e \"\\e[1;33mInvalid input.\\e[0m\" ;; esac; done'",
+        "notes": "",
+        "tags": "",
+        "priority": "NORMAL"
+      },
+      {
+        "label": "EFT SCRIPT",
+        "text": "RED='\\033[0;31m'; GREEN='\\033[0;32m'; YELLOW='\\033[1;33m'; CYAN='\\033[0;36m'; NC='\\033[0m'; while true; do echo -e \"${CYAN}Select from the following options:${NC}\"; echo -e \"1. EFT Errors Within pos.debug.log\"; echo -e \"2. Postilion Refresh and Reboot POS\"; echo -e \"3. Perform ./rec and Restart POS App\"; echo -e \"4. POS Memory Check\"; echo -e \"5. Postilion Config Server Check\"; echo -e \"6. Check Connected Devices\"; echo -e \"7. EnterKey\"; echo -e \"8. Rollout Group Check\"; echo -e \"9. PanEntry Checks\"; echo -e \"10. Exit\"; read -p \"Enter your choice (1-10): \" choice; case $choice in 1) echo -e \"${GREEN}Searching for EFT errors in pos.debug.log...${NC}\"; grep -C 15 \"Native\" /Postilion/logs/pos.debug.log;; 2) echo -e \"${RED}Refreshing Postilion and rebooting...${NC}\"; cd /Postilion/eSocket.POS/scripts/ && ./rec.sh; echo -e \"${RED}Rebooting POS...${NC}\"; cd /home/pos/bin/ && ./rebootPOS.sh;; 3) echo -e \"${RED}Performing ./rec...${NC}\"; echo -e \"${YELLOW}Cleaning up incoming files...${NC}\"; rm /Postilion/eSocket.POS/incoming/esp*; cd /Postilion/eSocket.POS/scripts/ && ./rec.sh; echo -e \"${YELLOW}Restarting POS...${NC}\"; cd /home/pos/bin/ && ./restartPOSApp.sh; echo -e \"${GREEN}Tailing PED Errors...${NC}\"; tail -F /Postilion/logs/pos.debug.log | grep -C 13 'Native'; echo -e \"${GREEN}Rec script and POS Restarted. Please check the output above for any errors.${NC}\";; 4) echo -e \"${RED}Performing POS memory check...${NC}\"; free -m;; 5) echo -e \"${GREEN}Postilion Config Server Check...${NC}\"; telnet $(grep 'wcstoreconf' /Postilion/esp.properties | awk -F'= ' '{print $2}' | head -n1) 58080;; 6) echo -e \"${GREEN}Checking Connected Devices...${NC}\"; lsusb;; 7) echo -e \"Sending EnterKey Command To POS\"; cd /home/pos/bin/ && ./enterkey.sh;; 8) echo -e \"${YELLOW}Checking Rollout Group...${NC}\"; grep Roll /Postilion/eSocket.POS/incoming/*;; 9) echo -e \"${YELLOW}Performing PanEntry Checks...${NC}\"; grep -E 'panEntryMode=(ICC_CONTACTLESS|ICC|UNKNOWN|MAGSTRIPE_SWIPED)' /beanstore/PosErrlogs/global.debug.log;; 10) echo -e \"Exiting the script.\"; exit 0;; *) echo -e \"Invalid choice. Please select a valid option.\"; esac; done",
+        "notes": "",
+        "tags": "",
+        "priority": "NORMAL"
+      },
+      {
+        "label": "Printer Issues",
+        "text": "less /usr/local/NCRRetail/Log/NCREvents.log",
+        "notes": "",
+        "tags": "",
+        "priority": "NORMAL"
+      },
+      {
+        "label": "DROP CACHE",
+        "text": "sync && echo 3 > /proc/sys/vm/drop_caches",
+        "notes": "",
+        "tags": "",
+        "priority": "NORMAL"
+      },
+      {
+        "label": "Delete Incoming",
+        "text": "rm /Postilion/eSocket.POS/incoming/esp*",
+        "notes": "",
+        "tags": "",
+        "priority": "NORMAL"
+      },
+      {
+        "label": "Check POS Crash",
+        "text": "echo \"=== NCR POS DIAGNOSTICS ===\"; echo; grep -iE \"NCRLoader|segfault|coredump|fatal|crash\" /var/log/messages | tail -20; echo; echo \"=== CRASH COUNT ===\"; grep -icE \"NCRLoader.*segfault|segfault|coredump|fatal|crash\" /var/log/messages; echo; echo \"=== LATEST EVENT ===\"; grep -iE \"NCRLoader|segfault|coredump|fatal|crash\" /var/log/messages | tail -1",
+        "notes": "",
+        "tags": "",
+        "priority": "NORMAL"
+      },
+      {
+        "label": "TXN Finder",
+        "text": "while true; do clear; echo -e \"\\e[1;34m========== POS LOG TOOL ==========\\e[0m\"; echo \"1) Search Transaction\"; echo \"2) Exit\"; echo -e \"\\e[1;34m==================================\\e[0m\"; read -p \"Choose an option: \" opt; case $opt in 1) read -p \"Enter transaction number: \" txn; read -p \"Enter date (YYYY-MM-DD, Enter=today): \" d; f=\"/beanstore/PosErrlogs/global.debug.log${d:+.$d}\"; o=\"/tmp/${txn}.log\"; [ ! -f \"$f\" ] && echo -e \"\\e[1;31m? File not found: $f\\e[0m\" && read -p \"Press Enter...\" && continue; grep -C8 \"<txnNumber>$txn</txnNumber>\" \"$f\" > \"$o\"; [ ! -s \"$o\" ] && echo -e \"\\e[1;31m? No transaction found\\e[0m\" && rm -f \"$o\" && read -p \"Press Enter...\" && continue; store=$(grep -m1 \"<storeCode>\" \"$o\"|sed -E 's/.*>(.*)<.*/\\1/'); till=$(grep -m1 \"<till>\" \"$o\"|sed -E 's/.*>(.*)<.*/\\1/'); opn=$(grep -m1 \"<operatorCode\" \"$o\"|sed -E 's/.*name=\"([^\"]+)\".*/\\1/'); opi=$(grep -A1 \"<operatorCode\" \"$o\"|grep \"<value>\"|head -1|sed -E 's/.*>(.*)<.*/\\1/'); st=$(grep -m1 \"<event type=\" \"$o\"|sed -E 's/.*type=\"([^\"]+)\".*/\\1/'); cnt=$(grep -c \"<txnNumber>$txn</txnNumber>\" \"$f\"); ts=$(grep \"<POSEventMessage>\" -B1 \"$o\"|grep -E \"^[0-9]{4}-\"|awk '{print $1\" \"$2}'); first=$(head -1 <<< \"$ts\"); last=$(tail -1 <<< \"$ts\"); s=$(date -d \"$first\" +%s 2>/dev/null); e=$(date -d \"$last\" +%s 2>/dev/null); dur=$((e-s)); clear; echo -e \"\\e[1;36m?? SUMMARY\\e[0m\"; echo -e \"Store:\\e[32m ${store:-N/A}\\e[0m | Till:\\e[32m ${till:-N/A}\\e[0m\"; echo -e \"Operator:\\e[32m ${opn:-N/A} (${opi:-N/A})\\e[0m\"; echo -e \"Status:\\e[32m ${st:-N/A}\\e[0m | Attempts:\\e[33m $cnt\\e[0m | Duration:\\e[36m $((dur/60))m $((dur%60))s\\e[0m\"; echo -e \"",
+        "notes": "",
+        "tags": "",
+        "priority": "NORMAL"
+      },
+      {
+        "label": "WEBTICKETS",
+        "text": "grep -C 25 'aborted (the booking|WS Workflow)|abort.jsp' /beanstore/PosErrlogs/global.debug.log",
+        "notes": "",
+        "tags": "",
+        "priority": "NORMAL"
+      },
+      {
+        "label": "SUPERVISOR SWIPE",
+        "text": "grep -C 50  eventName=SWIPEFORAUTH /beanstore/PosErrlogs/global.debug.log",
+        "notes": "",
+        "tags": "",
+        "priority": "NORMAL"
+      },
+      {
+        "label": "TICKET PRO",
+        "text": "grep \"secure.ticketpros.co.za\" /beanstore/PosErrlogs/VASErrlog.log",
+        "notes": "",
+        "tags": "",
+        "priority": "NORMAL"
+      },
+      {
+        "label": "POS PORTAL",
+        "text": "grep posportal /beanstore/PosErrlogs/VASErrlogs.log",
+        "notes": "",
+        "tags": "",
+        "priority": "NORMAL"
+      },
+      {
+        "label": "LOG SCRAPE",
+        "text": "grep -iE -C 25 'Fatal|DeviceException|JposException' /beanstore/PosErrlogs/global.debug.log",
+        "notes": "",
+        "tags": "",
+        "priority": "NORMAL"
+      },
+      {
+        "label": "POS CRASH CHECKS",
+        "text": "echo \"=== POS CRASH CHECK ===\"; grep -iE \"segfault|NCRLoader|coredump|fatal|crash\" /var/log/messages | tail -20 | sed 's/^/[CRASH] /'; echo; if grep -qiE \"segfault|NCRLoader|coredump|fatal|crash\" /var/log/messages; then echo \"[RESULT] POS HAS CRASHED\"; else echo \"[RESULT] NO POS CRASH DETECTED\"; fi",
+        "notes": "",
+        "tags": "",
+        "priority": "NORMAL"
+      },
+      {
+        "label": "Scanner Tail",
+        "text": "tail -f /beanstore/PosErrlogs/global.debug.log | grep -i --line-buffered -E \"queue input\"",
+        "notes": "",
+        "tags": "",
+        "priority": "NORMAL"
+      }
+    ]
+  },
+  "settings": {
+    "theme": "Cyberpunk",
+    "btn_size": "M",
+    "display_mode": "grid",
+    "layout_mode": "flow",
+    "opacity": 1.0,
+    "always_on_top": false,
+    "startup": false,
+    "auto_paste": true,
+    "pomo_focus": 25,
+    "pomo_break": 5
+  },
+  "quick_launch": [],
+  "reminders": [],
+  "macros": [],
+  "vault_entries": [],
+  "history": [],
+  "tickets": [],
+  "session_stats": {},
+  "notepad_tabs": []
+}

@@ -1,0 +1,96 @@
+COMMAND CENTRE PRO — BUILD BUNDLE
+==================================
+
+This bundle contains the complete, current src/ tree plus seed_data.json,
+with every recent fix and feature included:
+
+  • 4me proxy fix (Team Analytics now works on the corporate laptop)
+  • Notepad nav-pill fix
+  • Aurora background (tuned + position fix)
+  • Self-updater (TAG-BASED version check, SHA256 verify, one rolling backup)
+  • Keyboard shortcuts reference (? / F1)
+  • Upgrade Tracker (Upgrades nav pill + seed_data.json)
+  • Data export / import (Settings -> Backup & Sync)
+  • Icon-theft fix, keep-alive fix, WCAG contrast pass, nav-pill fit,
+    beautify pass (radius scale + smoother transitions)
+
+
+HOW TO BUILD (on your HOME PC, where Python + PyInstaller live)
+---------------------------------------------------------------
+1. Copy the "src" folder from this bundle over your project's src folder
+   (replace existing files).
+2. Copy "seed_data.json" into your project ROOT (next to main.py / BUILD.bat).
+3. *** Set the version *** - see "RELEASING A NEW VERSION" below.
+4. Run BUILD.bat.
+
+IMPORTANT — BUILD.bat needs these additions for the new features. Make sure
+your PyInstaller command in BUILD.bat includes:
+
+   --add-data "seed_data.json;." ^
+   --hidden-import src.panels.upgrade_tracker ^
+   --hidden-import src.panels.upgrade_tracker_panel ^
+   --hidden-import src.updater ^
+   --hidden-import src.panels.update_dialog ^
+   --hidden-import src.widgets.shortcuts_overlay ^
+   --collect-all requests ^
+
+(the "requests" collect-all ensures the updater + 4me client bundle cleanly)
+
+
+RELEASING A NEW VERSION (the auto-updater)
+------------------------------------------
+The updater compares CCP's built-in APP_VERSION against the latest GitHub
+release TAG. A higher tag on GitHub = users get prompted to update.
+
+So each release is THREE steps that must line up:
+
+  1. Edit src/updater.py and set:
+        APP_VERSION = "10.2"        <- the version you're about to release
+  2. Run BUILD.bat to produce the new CommandCentrePro.exe.
+  3. On GitHub, publish a Release TAGGED "10.2" and upload that exe as the
+     asset named exactly: CommandCentrePro.exe
+
+Result: anyone still on 10.1 gets the animated "Update available - v10.2"
+prompt on next launch, downloads it (verified against GitHub's SHA256), and
+CCP restarts itself into the new build.
+
+Rules of thumb:
+  • The tag and APP_VERSION must MATCH (both "10.2"). A leading "v" is fine
+    ("v10.2" works too) - compared numerically, so 10.10 > 10.9.
+  • The asset MUST be named CommandCentrePro.exe or the updater won't find it.
+  • If APP_VERSION equals the latest tag, no update is offered (correct - a
+    fresh build of the current version shouldn't nag itself).
+  • The check only runs in the built .exe, never when running from Python.
+
+Current APP_VERSION in this bundle: 10.1  (matches your live release, so a
+fresh 10.1 build won't prompt itself - bump it when you cut 10.2).
+
+
+RUNNING ON THE WORK LAPTOP (the proxy fix)
+------------------------------------------
+Just copy the freshly built CommandCentrePro.exe to the work laptop and run
+it. The proxy is detected automatically at runtime - you build at home (no
+proxy), but the exe looks for and uses the Pick n Pay proxy when it runs on
+the corporate network.
+
+If Team Analytics STILL times out on the work laptop:
+  1. On the laptop: Win+R -> inetcpl.cpl -> Connections -> LAN settings.
+     Note the Proxy server Address + Port (e.g. proxy.pnp.co.za : 8080).
+     (If "Use automatic configuration script" is ticked instead, that's a
+      PAC-file setup - tell the developer, it needs different handling.)
+  2. Win+R -> sysdm.cpl -> Advanced -> Environment Variables -> New (User):
+        Name:  HTTPS_PROXY
+        Value: http://proxy.pnp.co.za:8080   (use YOUR host:port)
+  3. Fully close and reopen CCP.
+
+
+BUILDING FROM ONEDRIVE — HEADS UP
+---------------------------------
+If your project lives in a OneDrive folder (e.g. OneDrive\Desktop\...),
+builds can fail with "PermissionError / Access is denied" on the exe,
+because OneDrive locks the file to sync it. Fix: either move the project
+OUT of OneDrive (e.g. C:\Dev\CommandCentrePro\), or pause OneDrive syncing
+while you build.
+
+Your data (commands, vault, settings) lives in
+%APPDATA%\Command Centre Pro\ and is never touched by a rebuild.
