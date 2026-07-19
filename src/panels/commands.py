@@ -2,14 +2,12 @@
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QLabel,
     QLineEdit, QScrollArea, QFrame, QMenu, QDialog, QTextEdit,
-    QComboBox, QMessageBox, QGridLayout, QSizePolicy, QInputDialog,
-    QGraphicsDropShadowEffect
+    QComboBox, QMessageBox, QGridLayout, QSizePolicy, QInputDialog
 )
 from PyQt6.QtCore import Qt, pyqtSignal, QTimer
 from PyQt6.QtGui  import QFont, QColor, QCursor
 from src import data as D
 from src.widgets.hover_card import HoverCard
-from src.widgets.command_tag import CommandTag
 from src.widgets.auto_scroll import AutoHideScrollBar
 
 def _tint(hex_color: str, amount: int) -> str:
@@ -23,28 +21,6 @@ def _tint(hex_color: str, amount: int) -> str:
         return f"#{r:02x}{g:02x}{b:02x}"
     except Exception:
         return hex_color
-
-
-def _row_widget(row_layout) -> QWidget:
-    """Wrap an HBoxLayout in a plain widget so a row of flowing tags can be
-    added to the outer QVBoxLayout with addWidget (matching the approved
-    design's per-row structure)."""
-    w = QWidget()
-    w.setStyleSheet("background:transparent;")
-    w.setLayout(row_layout)
-    return w
-
-
-def _clear_layout(layout):
-    """Recursively delete every widget inside a layout (and any nested
-    row layouts within it) — needed now that the grid is a stack of row
-    widgets rather than a flat QGridLayout of direct widget cells."""
-    while layout.count():
-        item = layout.takeAt(0)
-        if item.widget():
-            item.widget().deleteLater()
-        elif item.layout():
-            _clear_layout(item.layout())
 
 
 PRIORITY_COLORS = {
@@ -75,58 +51,23 @@ class CommandsPanel(QWidget):
         root.setSpacing(0)
 
         # ── Search ──────────────────────────────────────────
-        # A real framed input instead of an icon+field floating on nothing —
-        # this is the app's primary entry point, so it earns a proper look:
-        # soft inset field, hover lift, and an accent glow when focused.
-        sw = QWidget(); sw.setFixedHeight(52)
+        sw = QWidget(); sw.setFixedHeight(44)
         sw.setStyleSheet("background:transparent;")
-        outer_sl = QHBoxLayout(sw)
-        outer_sl.setContentsMargins(10, 8, 10, 8); outer_sl.setSpacing(8)
-
-        self._search_field = QWidget()
-        self._search_field.setObjectName("SearchField")
-        self._search_field.setStyleSheet(
-            "#SearchField{background:rgba(255,255,255,0.04);"
-            "border:1px solid rgba(255,255,255,0.09);border-radius:12px;}"
-            "#SearchField:hover{border-color:rgba(255,255,255,0.16);}")
-        sl = QHBoxLayout(self._search_field)
-        sl.setContentsMargins(12, 0, 8, 0); sl.setSpacing(8)
+        sl = QHBoxLayout(sw); sl.setContentsMargins(10,6,10,6); sl.setSpacing(6)
         icon = QLabel("⌕"); icon.setFixedWidth(18)
-        icon.setStyleSheet("background:transparent;color:#5a6b80;font-size:16px;border:none;")
+        icon.setStyleSheet("background:transparent;color:#6e7d90;font-size:15px;border:none;")
         sl.addWidget(icon)
         self._search_bar = QLineEdit()
         self._search_bar.setPlaceholderText("Search commands, #tags…")
-        self._search_bar.setStyleSheet(
-            "QLineEdit{background:transparent;border:none;color:#d4dfe9;"
-            "font-size:13px;selection-background-color:rgba(0,232,122,0.3);}")
         self._search_bar.textChanged.connect(self._on_search)
-        self._search_bar.focusInEvent = self._wrap_search_focus(
-            self._search_bar.focusInEvent, True)
-        self._search_bar.focusOutEvent = self._wrap_search_focus(
-            self._search_bar.focusOutEvent, False)
         sl.addWidget(self._search_bar, 1)
-
-        add_btn = QPushButton("+ Add"); add_btn.setFixedSize(70, 34)
-        add_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        add_btn = QPushButton("+ Add"); add_btn.setFixedSize(64, 30)
         add_btn.setStyleSheet(
-            "QPushButton{background:qlineargradient(x1:0,y1:0,x2:1,y2:1,"
-            "stop:0 #00e87a,stop:1 #00c96b);color:#062015;border:none;"
-            "border-radius:9px;font-weight:700;font-size:11px;}"
-            "QPushButton:hover{background:qlineargradient(x1:1,y1:1,x2:0,y2:0,"
-            "stop:0 #00e87a,stop:1 #00c96b);}"
-            "QPushButton:pressed{background:#00cc6a;}")
-        _add_glow = QGraphicsDropShadowEffect(add_btn)
-        _add_glow.setColor(QColor(0, 232, 122, 90))
-        _add_glow.setBlurRadius(14)
-        _add_glow.setOffset(0, 4)
-        add_btn.setGraphicsEffect(_add_glow)
+            "QPushButton{background:#00e87a;color:#080b12;border:none;"
+            "border-radius:8px;font-weight:700;font-size:11px;}"
+            "QPushButton:hover{background:#00ff88;}")
         add_btn.clicked.connect(self._add_command)
-        # Add button sits INSIDE the same bordered glass box as the search
-        # input (matching the approved design's single-container structure),
-        # not as a separate element floating outside it.
         sl.addWidget(add_btn)
-
-        outer_sl.addWidget(self._search_field, 1)
         root.addWidget(sw)
 
         # ── Category pills — plain QHBoxLayout, NO scroll area ──
@@ -154,19 +95,11 @@ class CommandsPanel(QWidget):
             "QScrollBar::handle:vertical{background:transparent;}"
             "QScrollBar::add-line:vertical,QScrollBar::sub-line:vertical{height:0;}")
 
-        self._grid_w = QWidget()
-        self._grid_w.setObjectName("CommandGridPanel")
-        self._grid_w.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
-        self._grid_w.setStyleSheet(
-            "#CommandGridPanel{background:rgba(255,255,255,0.018);"
-            "border:1px solid rgba(255,255,255,0.06);border-radius:13px;}")
-        # A vertical stack of flowing HBoxLayout rows, NOT a rigid QGridLayout
-        # with stretched-equal columns. Each command tag now sizes to its own
-        # text (see CommandTag.sizeHint) so short labels stay compact and
-        # long ones don't force everything else in the row to match their
-        # width — matching the approved design's natural "tag cloud" flow.
-        self._grid = QVBoxLayout(self._grid_w)
-        self._grid.setContentsMargins(12, 12, 12, 12); self._grid.setSpacing(8)
+        self._grid_w = QWidget(); self._grid_w.setStyleSheet("background:transparent;")
+        self._grid   = QGridLayout(self._grid_w)
+        self._grid.setContentsMargins(8,8,8,8); self._grid.setSpacing(6)
+        for _c in range(6):
+            self._grid.setColumnStretch(_c, 1)
         self._scroll.setWidget(self._grid_w)
         root.addWidget(self._scroll, 1)
         # Auto-hide scrollbar overlay
@@ -178,7 +111,7 @@ class CommandsPanel(QWidget):
         fl = QHBoxLayout(ft); fl.setContentsMargins(10,4,10,4)
         add_c = QPushButton("+ Add Command")
         add_c.setStyleSheet(
-            f"QPushButton{{background:transparent;color:#3a4e64;border:none;"
+            f"QPushButton{{background:transparent;color:#6b83a0;border:none;"
             f"font-size:10px;font-family:{FONT};}}"
             f"QPushButton:hover{{color:#9ca3af;}}")
         add_c.clicked.connect(self._add_command)
@@ -192,22 +125,6 @@ class CommandsPanel(QWidget):
             cats = self.app.data.get("categories", [])
             self._current_cat = cats[0] if cats else None
         self._rebuild_grid()
-
-    def _wrap_search_focus(self, original_handler, focused):
-        """Wrap the search field's focus events to glow its border while
-        the cursor is active in it, and settle back to a quiet frame on blur."""
-        def handler(event):
-            if focused:
-                self._search_field.setStyleSheet(
-                    "#SearchField{background:rgba(255,255,255,0.05);"
-                    "border:1px solid rgba(0,232,122,0.5);border-radius:12px;}")
-            else:
-                self._search_field.setStyleSheet(
-                    "#SearchField{background:rgba(255,255,255,0.04);"
-                    "border:1px solid rgba(255,255,255,0.09);border-radius:12px;}"
-                    "#SearchField:hover{border-color:rgba(255,255,255,0.16);}")
-            return original_handler(event)
-        return handler
 
     def _on_search(self, text):
         self._search_text = text; self._rebuild_grid()
@@ -225,73 +142,47 @@ class CommandsPanel(QWidget):
             w = item.widget()
             if w: w.deleteLater()
 
-        p       = self._palette
-        accent  = p.get("accent", "#00e87a")
-        accent2 = p.get("accent2", p.get("blue", accent))
-        text_c  = p.get("text",   "#d4dfe9")
+        p      = self._palette
+        accent = p.get("accent", "#00e87a")
+        text_c = p.get("text",   "#d4dfe9")
 
         for cat in self.app.data.get("categories", []):
             count  = len(self.app.data.get("commands",{}).get(cat,[]))
+            label  = f"{cat}  {count}" if count else cat
             active = (cat == self._current_cat)
-
-            box = QWidget()
-            box.setFixedHeight(30)
-            box.setCursor(Qt.CursorShape.PointingHandCursor)
-            box.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
-            box.setObjectName("CatPill")
+            btn    = QPushButton(label)
+            btn.setFixedHeight(26)
+            btn.setFont(QFont("Inter", 10))
+            btn.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Fixed)
             if active:
-                # One shared brand gradient for every active pill — not a
-                # different hue per category — but a REAL two-tone gradient
-                # fill, not just a subtle border change, so the selected
-                # category clearly pops against the neutral inactive ones.
-                box.setStyleSheet(
-                    "#CatPill{background:qlineargradient(x1:0,y1:0,x2:1,y2:1,"
-                    f"stop:0 rgba({QColor(accent).red()},{QColor(accent).green()},{QColor(accent).blue()},40),"
-                    f"stop:1 rgba({QColor(accent2).red()},{QColor(accent2).green()},{QColor(accent2).blue()},25));"
-                    f"border:1px solid {accent}77;border-radius:10px;}}")
+                accent2 = p.get("accent2", p.get("blue", accent))
+                btn.setStyleSheet(
+                    f"QPushButton{{background:qlineargradient(x1:0,y1:0,x2:1,y2:1,"
+                    f"stop:0 {accent},stop:1 {accent2});"
+                    f"color:#060a10;border:none;"
+                    f"border-radius:12px;padding:2px 14px;font-size:10px;font-weight:700;}}"
+                    f"QPushButton:hover{{background:qlineargradient(x1:1,y1:0,x2:0,y2:1,"
+                    f"stop:0 {accent},stop:1 {accent2});}}")
             else:
-                box.setStyleSheet(
-                    "#CatPill{background:rgba(255,255,255,0.035);"
-                    "border:1px solid rgba(255,255,255,0.09);border-radius:10px;}"
-                    "#CatPill:hover{background:rgba(255,255,255,0.06);"
-                    "border-color:rgba(255,255,255,0.18);}")
-
-            bl = QHBoxLayout(box)
-            bl.setContentsMargins(6, 4, 13, 4)
-            bl.setSpacing(8)
-
-            badge = QLabel(str(count))
-            badge.setFixedSize(22, 22)
-            badge.setAlignment(Qt.AlignmentFlag.AlignCenter)
-            badge.setStyleSheet(
-                f"background:qlineargradient(x1:0,y1:0,x2:1,y2:1,"
-                f"stop:0 {accent},stop:1 {accent2});"
-                f"color:#062015;border-radius:7px;font-size:10px;"
-                f"font-weight:800;border:none;")
-            bl.addWidget(badge)
-
-            lbl = QLabel(cat)
-            lbl.setStyleSheet(
-                f"background:transparent;color:{'#eef3f7' if active else '#9aa9bb'};"
-                f"font-size:11px;font-weight:700;border:none;")
-            bl.addWidget(lbl)
-
-            def _pill_click(e, c=cat, b=box):
-                if e.button() == Qt.MouseButton.LeftButton:
-                    self._bounce(b)
-                    self._select_cat(c)
-            box.mousePressEvent = _pill_click
-            box.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
-            box.customContextMenuRequested.connect(lambda pos, c=cat: self._cat_ctx(c))
-            self._cat_lay.addWidget(box)
+                btn.setStyleSheet(
+                    f"QPushButton{{background:rgba(255,255,255,0.07);color:{text_c};"
+                    f"border:1px solid rgba(255,255,255,0.13);"
+                    f"border-radius:12px;padding:2px 12px;font-size:10px;font-weight:500;}}"
+                    f"QPushButton:hover{{color:{accent};border-color:{accent};"
+                    f"background:rgba(255,255,255,0.12);}}")
+            btn.clicked.connect(lambda checked, c=cat, b=btn: (
+                self._bounce(b), self._select_cat(c)))
+            btn.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+            btn.customContextMenuRequested.connect(lambda pos, c=cat: self._cat_ctx(c))
+            self._cat_lay.addWidget(btn)
 
         # + Category button
         add_c = QPushButton("+ Category")
         add_c.setFixedHeight(26)
         add_c.setFont(QFont("Inter", 10))
         add_c.setStyleSheet(
-            f"QPushButton{{background:transparent;color:#3a4e64;"
-            f"border:1px solid rgba(255,255,255,0.10);border-radius:13px;"
+            f"QPushButton{{background:transparent;color:#6b83a0;"
+            f"border:1px solid rgba(255,255,255,0.10);border-radius:12px;"
             f"padding:2px 10px;font-size:10px;}}"
             f"QPushButton:hover{{color:{text_c};border-color:rgba(255,255,255,0.25);}}")
         add_c.clicked.connect(self._add_category)
@@ -322,10 +213,8 @@ class CommandsPanel(QWidget):
     def _rebuild_grid(self):
         while self._grid.count():
             item = self._grid.takeAt(0)
-            if item.widget():
+            if item and item.widget():
                 item.widget().deleteLater()
-            elif item.layout():
-                _clear_layout(item.layout())
 
         cmds = self._get_commands()
         p      = self._palette
@@ -338,83 +227,41 @@ class CommandsPanel(QWidget):
             lbl = QLabel("No commands yet.\nClick + Add Command to create one.")
             lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
             lbl.setStyleSheet(
-                f"background:transparent;color:#3a4e64;font-size:12px;"
+                f"background:transparent;color:#6b83a0;font-size:12px;"
                 f"border:none;font-family:{FONT};")
-            self._grid.addWidget(lbl)
-            self._grid_w.setMinimumHeight(80)
+            self._grid.addWidget(lbl, 0, 0, 1, 6)
+            self._grid_w.setFixedHeight(80)
             return
 
+        COLS   = 6
         BTN_H  = 40
         FONT_SZ = 9
         FONT_W  = 500
-        # How many tags fit per row is based on the panel's own width, not a
-        # fixed column count — a flowing wrap, not a rigid grid.
-        avail_w = max(self._scroll.viewport().width() - 24, 300)
-        # Rotating palette for the cap colour — the approved design used
-        # varied colours per command tile for visual rhythm (distinct from
-        # the category-pill "don't colour-code" decision, which was about a
-        # different element). Falls back to the single accent if a theme is
-        # missing some of these keys.
-        _tag_palette = [c for c in [
-            p.get("green", accent), p.get("blue", accent),
-            p.get("purple", accent), p.get("amber", accent),
-            p.get("red", accent),
-        ] if c]
-        if not _tag_palette:
-            _tag_palette = [accent]
-
-        row = None
-        row_w = 0
-        row_count = 0
         for i, cmd in enumerate(cmds):
             label  = cmd.get("label","")
             txt    = cmd.get("text","")
             pcolor = PRIORITY_COLORS.get(cmd.get("priority","NORMAL"),"")
             accent2 = p.get("accent2", p.get("blue", accent))
-            cap_accent = _tag_palette[i % len(_tag_palette)]
-            row_bg  = card if row_count % 2 == 0 else _tint(card, 8)
-            btn = CommandTag(label, accent=cap_accent, bg=row_bg,
+            # Subtle row tint — even rows slightly lighter for grid separation
+            row_idx = i // COLS
+            row_bg  = card if row_idx % 2 == 0 else _tint(card, 8)
+            btn = HoverCard(label, accent=accent, bg=row_bg,
                             border=border, priority_color=pcolor,
                             accent2=accent2)
             btn.setFixedHeight(BTN_H)
-            _tag_font = QFont()
-            _tag_font.setFamilies(["Manrope", "Segoe UI Semibold", "Segoe UI Variable Text", "Segoe UI"])
-            _tag_font.setPointSize(FONT_SZ)
-            _tag_font.setWeight(QFont.Weight(FONT_W))
-            btn.setFont(_tag_font)
+            btn.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+            btn.setFont(QFont("Segoe UI Variable Text", FONT_SZ, FONT_W))
             btn.setWindowOpacity(0.0)
-            try:
-                from src.widgets.hover_lift import add_hover_lift
-                add_hover_lift(btn, lift=2, shadow_color=cap_accent)
-            except Exception:
-                pass
             btn.clicked.connect(lambda checked, l=label, t=txt: self._copy(l, t))
             btn.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
             btn.customContextMenuRequested.connect(
                 lambda pos, c=cmd: self._cmd_ctx(c))
-
-            tag_w = btn.sizeHint().width()
-            if row is None or row_w + tag_w + 8 > avail_w:
-                row = QHBoxLayout(); row.setSpacing(8)
-                self._grid.addWidget(_row_widget(row))
-                row_w = 0
-                row_count += 1
-            row.addWidget(btn)
-            row_w += tag_w + 8
-
+            self._grid.addWidget(btn, i // COLS, i % COLS)
             # Staggered fade-in entrance
             QTimer.singleShot(i * 18, lambda b=btn: self._fade_in_btn(b))
 
-        if row is not None:
-            row.addStretch()
-        # No manual height calculation here — rows wrap dynamically based on
-        # the ACTUAL runtime width, so any pre-computed row-count formula can
-        # drift out of sync with what really gets rendered (that drift is
-        # exactly what caused rows to overlap the footer below the panel).
-        # Letting the QVBoxLayout size itself from its real child rows, with
-        # the surrounding QScrollArea (setWidgetResizable=True) handling any
-        # overflow via scrolling, is the robust fix.
-        self._grid_w.updateGeometry()
+        rows = (len(cmds) + COLS - 1) // COLS
+        self._grid_w.setFixedHeight(rows * BTN_H + rows * 8 + 16)
 
     def _get_commands(self):
         s = self._search_text.strip().lower()
@@ -565,19 +412,11 @@ class CommandsPanel(QWidget):
             self._autoscroll._accent  = accent
             self._autoscroll._accent2 = accent2
             self._autoscroll.update()
-        # Update command-tag colours on existing grid buttons — now that the
-        # grid is a stack of flowing ROW widgets (not a flat grid of direct
-        # button cells), recurse one level into each row to find them.
+        # Update HoverCard colours on existing grid buttons
         for i in range(self._grid.count()):
-            row_item = self._grid.itemAt(i)
-            row_w = row_item.widget() if row_item else None
-            row_layout = row_w.layout() if row_w else None
-            if not row_layout:
-                continue
-            for j in range(row_layout.count()):
-                cell = row_layout.itemAt(j)
-                if cell and cell.widget() and hasattr(cell.widget(), 'set_colours'):
-                    cell.widget().set_colours(accent, bg, border, text)
+            item = self._grid.itemAt(i)
+            if item and item.widget() and hasattr(item.widget(), 'set_colours'):
+                item.widget().set_colours(accent, bg, border, text)
         self.refresh()
 
 
@@ -623,13 +462,13 @@ class CommandDialog(QDialog):
         cancel = QPushButton("Cancel"); cancel.clicked.connect(self.reject); br.addWidget(cancel)
         ok = QPushButton("Save")
         ok.setStyleSheet("QPushButton{background:#00e87a;color:#080b12;border:none;"
-                         "border-radius:7px;padding:6px 18px;font-weight:700;}"
+                         "border-radius:8px;padding:6px 18px;font-weight:700;}"
                          "QPushButton:hover{background:#00ff88;}")
         ok.clicked.connect(self.accept); br.addWidget(ok); lay.addLayout(br)
 
     def _lbl(self, t):
         l = QLabel(t); l.setStyleSheet(
-            f"background:transparent;color:#3a4e64;font-size:9px;"
+            f"background:transparent;color:#6b83a0;font-size:9px;"
             f"font-weight:700;letter-spacing:2px;border:none;font-family:{FONT};")
         return l
 

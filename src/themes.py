@@ -6,7 +6,7 @@ THEMES = {
         "accent2":"#38bdf8",
         "bg":"#050810","panel":"#080d16","card":"#0d1520","border":"#172338",
         "green":"#00e87a","blue":"#38bdf8","purple":"#a78bfa","red":"#f87171",
-        "amber":"#fbbf24","text":"#d4dfe9","dim":"#3a4e64","btnbg":"#0e1928",
+        "amber":"#fbbf24","text":"#d4dfe9","dim":"#6b83a0","btnbg":"#0e1928",
         "accent":"#00e87a","title":"#00e87a","sidebar":"#040710",
         "hover":"#121d2c","input":"#070c16",
     },
@@ -135,7 +135,7 @@ QScrollArea > QWidget, QAbstractScrollArea > QWidget,
 QAbstractScrollArea > QWidget > QWidget {{
     background-color: {t['bg']};
 }}
-#CentralWidget, #ContentStack {{ background-color: {t['bg']}; }}
+#CentralWidget, #ContentStack {{ background-color: transparent; }}
 #Panel {{ background-color: {t['panel']}; }}
 #Toolbar {{
     background: qlineargradient(x1:0,y1:0,x2:1,y2:0,
@@ -174,6 +174,25 @@ QLabel {{
     line-height: 1.5;
 }}
 
+/* ══ REFINED SECTION LABELS ══════════════════════════════════
+   The ALL-CAPS eyebrow labels that head panels and sections are
+   the most-repeated text pattern in the app. A single consistent
+   treatment — 9.5px, weight 700, 2px tracking, dim colour — reads
+   as deliberate typographic rhythm instead of ad-hoc per-panel
+   sizing. Apply via objectName "SectionLabel". */
+QLabel#SectionLabel {{
+    color: {t['dim']};
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 2px;
+}}
+QLabel#SectionLabelAccent {{
+    color: {t['accent']};
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 2px;
+}}
+
 /* ══ SCROLLBARS — ultra thin, barely there ═══════════════════ */
 QScrollBar:vertical {{
     background: transparent;
@@ -201,8 +220,12 @@ QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal {{ width: 0; }}
 
 /* ══ CARDS ═══════════════════════════════════════════════════ */
 #Card {{
-    background: {t['card']};
+    background: qlineargradient(x1:0,y1:0,x2:0,y2:1,
+        stop:0 rgba(255,255,255,0.028),
+        stop:0.12 {t['card']},
+        stop:1 {t['card']});
     border: 1px solid {t['border']};
+    border-top: 1px solid rgba(255,255,255,0.09);
     border-radius: 12px;
 }}
 
@@ -308,7 +331,8 @@ QPushButton:pressed {{ background: {t['panel']}; }}
     background: {t['hover']};
 }}
 #NavPillActive {{
-    background: {t['accent']};
+    background: qlineargradient(x1:0,y1:0,x2:1,y2:1,
+        stop:0 {t['accent']}, stop:1 {t['accent2']});
     color: {t['bg']};
     border: none;
     border-radius: 13px;
@@ -812,13 +836,13 @@ QPushButton:disabled {{
 #NavBtn {{
     background: qlineargradient(x1:0,y1:0,x2:1,y2:0,
         stop:0 {t['accent']}, stop:1 {t['blue']});
-    border: 1px solid rgba(255,255,255,0.14);
-    border-radius: 10px;
+    border: 1px solid rgba(255,255,255,0.10);
+    border-radius: 8px;
     color: {t['bg']};
-    font-size: 12px;
-    font-weight: 800;
-    letter-spacing: 0.6px;
-    padding: 0 18px;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.5px;
+    padding: 4px 14px;
 }}
 #NavBtn:hover {{
     background: qlineargradient(x1:1,y1:0,x2:0,y2:0,
@@ -1547,6 +1571,16 @@ QSlider::sub-page:horizontal {{
         stop:0 {t['accent']}, stop:1 {t['blue']});
     border-radius: 2px;
     height: 3px;
+}}
+
+/* ══ GLOBAL PRESSED-STATE SAFETY NET ═══════════════════════════
+   Any QPushButton that doesn't define its own :pressed rule
+   still gets visible tactile click feedback — a soft accent
+   ring plus a subtle inward nudge, so clicks feel consistent
+   everywhere, not just on buttons that were hand-tuned. */
+QPushButton:pressed {{
+    border: 1px solid {t['accent']};
+    padding-top: 1px;
 }}
 
 """

@@ -9,62 +9,6 @@ from PyQt6.QtGui     import (QPainter, QColor, QLinearGradient,
                               QFont, QFontMetrics, QBrush, QPainterPath)
 
 
-class StaticGradientLabel(QWidget):
-    """
-    A still (non-animated) vertical gradient text label — white fading to a
-    pale accent tint top-to-bottom, no motion. Used for the main wordmark so
-    it reads as a stable brand mark, distinct from the small animated "PRO"
-    sweep next to it (same glow-text family, two different techniques).
-    """
-    def __init__(self, text: str, accent: str = "#00e87a", parent=None):
-        super().__init__(parent)
-        self._text   = text
-        self._accent = accent
-        self.setStyleSheet("background:transparent;")
-        self.setAttribute(Qt.WidgetAttribute.WA_NoSystemBackground)
-
-        self._font = QFont()
-        self._font.setFamilies(["Manrope", "Segoe UI Semibold", "Segoe UI Variable Text", "Segoe UI"])
-        self._font.setPointSize(10)
-        self._font.setWeight(QFont.Weight.ExtraBold)
-        self._font.setLetterSpacing(QFont.SpacingType.AbsoluteSpacing, 1.5)
-        self._font.setStyleStrategy(
-            QFont.StyleStrategy.PreferAntialias |
-            QFont.StyleStrategy.NoSubpixelAntialias)
-
-        fm = QFontMetrics(self._font)
-        self.setMinimumSize(fm.horizontalAdvance(text) + 8, fm.height() + 6)
-        self.setMaximumHeight(fm.height() + 8)
-        self.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Fixed)
-
-    def set_accent(self, accent: str):
-        self._accent = accent
-        self.update()
-
-    def paintEvent(self, event):
-        p = QPainter(self)
-        p.setRenderHint(QPainter.RenderHint.Antialiasing)
-        p.setRenderHint(QPainter.RenderHint.TextAntialiasing)
-
-        w, h = self.width(), self.height()
-        tint = QColor(self._accent)
-        # a very pale version of the accent for the gradient's bottom stop
-        pale = QColor(
-            int(tint.red()   * 0.35 + 255 * 0.65),
-            int(tint.green() * 0.55 + 255 * 0.45),
-            int(tint.blue()  * 0.45 + 255 * 0.55))
-
-        grad = QLinearGradient(0, 0, 0, h)
-        grad.setColorAt(0.0, QColor(255, 255, 255))
-        grad.setColorAt(1.0, pale)
-
-        fm   = QFontMetrics(self._font)
-        path = QPainterPath()
-        path.addText(4, h - fm.descent() - 1, self._font, self._text)
-        p.setPen(Qt.PenStyle.NoPen)
-        p.fillPath(path, QBrush(grad))
-
-
 class GradientTitle(QWidget):
     def __init__(self, text: str = "COMMAND CENTRE PRO",
                  accent: str = "#00e87a", accent2: str = "#38bdf8",
@@ -77,10 +21,7 @@ class GradientTitle(QWidget):
         self.setStyleSheet("background:transparent;")
         self.setAttribute(Qt.WidgetAttribute.WA_NoSystemBackground)
 
-        self._font = QFont()
-        self._font.setFamilies(["Manrope", "Segoe UI Semibold", "Segoe UI Variable Text", "Segoe UI"])
-        self._font.setPointSize(10)
-        self._font.setWeight(QFont.Weight.ExtraBold)
+        self._font = QFont("Segoe UI Variable Text", 10, QFont.Weight.ExtraBold)
         self._font.setLetterSpacing(QFont.SpacingType.AbsoluteSpacing, 3.0)
         self._font.setStyleStrategy(
             QFont.StyleStrategy.PreferAntialias |

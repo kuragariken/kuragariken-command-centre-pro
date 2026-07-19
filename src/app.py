@@ -37,13 +37,12 @@ from src.widgets.kinetic_label    import KineticLabel
 from src.hotkeys import HotkeyManager
 from src.widgets.command_palette import CommandPalette
 
-DEFAULT_W, DEFAULT_H = 900, 300
+DEFAULT_W, DEFAULT_H = 780, 300
 
 NAV_ITEMS = [
     ("Commands",   "commands"),
     ("Analytics",  "analytics"),
     ("Teams",      "teams"),
-    ("Upgrades",   "upgrades"),
     ("Reminders",  "reminders"),
     ("Macros",     "macros"),
     ("History",    "history"),
@@ -152,9 +151,10 @@ class CommandCentreApp(QMainWindow):
 
         root.addWidget(self._make_title_bar())
 
-        # Floating nav popup — created here but NOT added to any layout;
-        # it's a standalone Popup window shown/positioned on demand.
         self._nav_dropdown = self._make_nav_dropdown()
+        self._nav_dropdown.setMaximumHeight(0)
+        self._nav_dropdown.setVisible(True)
+        root.addWidget(self._nav_dropdown)
 
         sep = QFrame()
         sep.setFixedHeight(1)
@@ -183,31 +183,23 @@ class CommandCentreApp(QMainWindow):
         # Particle trail — sparks on copy
         self._particles = ParticleTrail(self)
 
-        # Keyboard shortcuts reference (? or F1) — discoverability
-        from src.widgets.shortcuts_overlay import ShortcutsOverlay
-        self._shortcuts_overlay = ShortcutsOverlay(self)
-
-        # Self-updater: silent check on startup, animated prompt if newer
-        from src.panels.update_dialog import UpdateDialog
-        self._update_dialog = UpdateDialog(self, self._palette.get("accent", "#00e87a"))
-        QTimer.singleShot(2500, lambda: self._check_for_update(manual=False))
-
     # ─────────────────────────────────────────────────────────────
     # TITLE BAR
     # ─────────────────────────────────────────────────────────────
     def _make_title_bar(self) -> QWidget:
         wrapper = QWidget()
-        wrapper.setFixedHeight(58)
+        wrapper.setFixedHeight(46)
         wrapper.setStyleSheet("background:rgba(5,8,16,0.92);")
         wl = QVBoxLayout(wrapper)
         wl.setContentsMargins(0, 0, 0, 0)
         wl.setSpacing(0)
 
+        # Animated shimmer line
         self._accent_line = AccentLine(wrapper)
         wl.addWidget(self._accent_line)
 
         bar = QWidget()
-        bar.setFixedHeight(56)
+        bar.setFixedHeight(44)
         bar.setStyleSheet("background:rgba(6,10,18,0.94);""border-bottom:1px solid rgba(255,255,255,0.07);")
         wl.addWidget(bar)
 
@@ -215,93 +207,76 @@ class CommandCentreApp(QMainWindow):
         lay.setContentsMargins(14, 0, 10, 0)
         lay.setSpacing(0)
 
-        # Accent stripe — 4x26, with its own glow (matches the HTML's
-        # box-shadow:0 0 14px rgba(0,232,122,0.7) on .accent-bar)
+        # Accent stripe
         self._accent_mark = QLabel()
-        self._accent_mark.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
-        self._accent_mark.setFixedSize(4, 26)
+        self._accent_mark.setFixedSize(3, 22)
         self._accent_mark.setObjectName("AccentMark")
-        self._accent_mark.setStyleSheet("background:#00e87a; border-radius:2px;")
-        _accent_glow = QGraphicsDropShadowEffect(self._accent_mark)
-        _accent_glow.setColor(QColor("#00e87a"))
-        _accent_glow.setBlurRadius(14)
-        _accent_glow.setOffset(0, 0)
-        self._accent_mark.setGraphicsEffect(_accent_glow)
-        self._accent_mark_glow = _accent_glow
+        self._accent_mark.setStyleSheet("background:#00e87a; border-radius:1px;")
         lay.addWidget(self._accent_mark)
         lay.addSpacing(12)
 
-        # Wordmark — "COMMAND CENTRE" static glow gradient, "PRO" keeps its
-        # small animated sweep. Two techniques, one glowing-text family.
-        from src.widgets.gradient_title import StaticGradientLabel
-        self._wordmark = StaticGradientLabel("COMMAND CENTRE")
-        self._wordmark.setObjectName("Wordmark")
-        _wm_glow = QGraphicsDropShadowEffect(self._wordmark)
-        _wm_glow.setColor(QColor("#00e87a"))
-        _wm_glow.setBlurRadius(22)
-        _wm_glow.setOffset(0, 0)
-        self._wordmark.setGraphicsEffect(_wm_glow)
-        self._wordmark_glow = _wm_glow
-        lay.addWidget(self._wordmark)
-        lay.addSpacing(7)
-
-        title = GradientTitle("PRO")
+        # Title
+        title = GradientTitle("COMMAND CENTRE PRO")
         title.setObjectName("AppTitle")
         self._gradient_title = title
         lay.addWidget(title)
-        lay.addStretch(1)   # left group takes its own space; nav sits centred
+        lay.addStretch(1)  # push nav btn to centre, title stays left
 
-        # Nav trigger — the ONE dropdown pill, centred, with a glow anchor
+        # Nav trigger
         self._nav_btn = QPushButton("COMMANDS  ▾")
         self._nav_btn.setObjectName("NavBtn")
-        self._nav_btn.setFixedHeight(32)
-        self._nav_btn.setMinimumWidth(140)
-        self._nav_btn.setFont(QFont("Inter", 9, QFont.Weight.Bold))
+        self._nav_btn.setFixedHeight(28)
+        self._nav_btn.setMinimumWidth(130)
+        self._nav_btn.setFont(QFont("Inter", 8, QFont.Weight.Bold))
         self._nav_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self._nav_btn.clicked.connect(self._toggle_nav_dropdown)
-        _nav_glow = QGraphicsDropShadowEffect(self._nav_btn)
-        _nav_glow.setColor(QColor("#00e87a"))
-        _nav_glow.setBlurRadius(45)
-        _nav_glow.setOffset(0, 4)
-        self._nav_btn.setGraphicsEffect(_nav_glow)
         lay.addWidget(self._nav_btn)
-        lay.addStretch(1)   # right group takes equal space -> true centring
+        lay.addStretch(1)
 
-        # Pomodoro — feature stays reachable via the right-click menu and
-        # its own toast; it no longer occupies header space.
+        # Pomodoro
         self._pomo_widget = PomodoroWidget(self)
+        lay.addWidget(self._pomo_widget)
 
-        # ── Status chips: Keep-Alive + clock, ONE shared chip style ──
-        # (see _style_status_chip — the single source of truth so a status
-        # change can never again silently discard the chip look)
+        # Keep-Alive toggle — same style as POMO
         self._ka_label = QLabel("KEEP-ALIVE")
-        self._ka_label.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
+        self._ka_label.setStyleSheet(
+            "QLabel{background:transparent;color:#3a4e64;"
+            "font-size:9px;font-weight:700;letter-spacing:1px;"
+            "border:none;border-radius:4px;padding:2px 6px;}"
+            "QLabel:hover{background:rgba(255,255,255,0.06);color:#6b7f96;}")
         self._ka_label.setCursor(Qt.CursorShape.PointingHandCursor)
         self._ka_label.mousePressEvent = lambda e: self._toggle_keep_alive()
         self._ka_worker = None
         lay.addWidget(self._ka_label)
-        lay.addSpacing(10)
-        self._style_status_chip(self._ka_label, "#00e87a")
+        lay.addSpacing(14)
 
+        # Separator
+        self._s1 = QLabel()
+        self._s1.setFixedSize(1, 18)
+        self._s1.setStyleSheet("background:#1f2d3d;")
+        lay.addWidget(self._s1)
+        lay.addSpacing(14)
+
+        # Clock
         self._clock = QLabel("00:00:00")
-        self._clock.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
         self._clock.setObjectName("Clock")
-        self._clock.setFixedWidth(84)
+        self._clock.setFixedWidth(72)
         self._clock.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self._clock.setFont(QFont("JetBrains Mono", 10))
+        self._clock.setStyleSheet(
+            "background:transparent; color:#4a5568; border:none;"
+            "font-family:'JetBrains Mono','Cascadia Code','Fira Code','JetBrains Mono','Cascadia Code','Fira Code','Consolas',monospace;"
+            "font-size:12px; font-weight:600;")
         lay.addWidget(self._clock)
-        self._style_status_chip(self._clock, "#8494a8", mono=True)
 
-        # Kept alive (unused visually) so the theme-switch loop iterating
-        # [self._s1, self._s2] doesn't break; no divider lines are shown —
-        # the reference design has the chips sitting adjacent with just
-        # spacing between them.
-        self._s1 = QLabel(); self._s1.setFixedSize(1, 18)
-        self._s2 = QLabel(); self._s2.setFixedSize(1, 18)
-
+        lay.addSpacing(14)
+        self._s2 = QLabel()
+        self._s2.setFixedSize(1, 18)
+        self._s2.setStyleSheet("background:#1f2d3d;")
+        lay.addWidget(self._s2)
+        self._ka_worker = None
         lay.addSpacing(10)
 
-        # Window control dots — coloured circles, no text symbols
+        # Window control dots — coloured circles, NO text symbols
         self._pin_btn = self._dot_btn("#fbbf24", "#f59e0b", "Always on top", self._toggle_pin)
         self._min_btn = self._dot_btn("#4ade80", "#22c55e", "Minimise",       self.showMinimized)
         self._cls_btn = self._dot_btn("#f87171", "#ef4444", "Close to tray",  self._hide_to_tray)
@@ -311,28 +286,6 @@ class CommandCentreApp(QMainWindow):
         lay.addSpacing(2)
 
         return wrapper
-
-    def _style_status_chip(self, label: QLabel, color: str, mono: bool = False):
-        """
-        The ONE place that styles a header status chip (Keep-Alive or the
-        clock) — matches the HTML reference's single .status-chip class
-        exactly: padding 7px 12px, border-radius 8px, font-size 10.5px,
-        a tinted background at the given colour, and a matching border.
-        Every status change (keep-alive start/stop/found/lost, theme
-        switch) MUST call this rather than set its own stylesheet — that
-        was exactly the bug that kept discarding the chip look before.
-        """
-        c = QColor(color)
-        r, g, b = c.red(), c.green(), c.blue()
-        font_css = ("font-family:'JetBrains Mono','Cascadia Code','Fira Code','Consolas',monospace;"
-                    if mono else "")
-        label.setStyleSheet(
-            f"QLabel{{background:rgba({r},{g},{b},18);color:{color};"
-            f"{font_css}"
-            f"font-size:10.5px;font-weight:700;letter-spacing:0.4px;"
-            f"border:1px solid rgba({r},{g},{b},60);"
-            f"border-radius:8px;padding:7px 12px;}}"
-            f"QLabel:hover{{background:rgba({r},{g},{b},32);}}")
 
     def _toggle_keep_alive(self):
         if self._ka_worker is None:
@@ -354,7 +307,11 @@ class CommandCentreApp(QMainWindow):
         self._ka_worker.status_update.connect(self._on_ka_status)
         self._ka_worker.found_window.connect(self._on_ka_found)
         self._ka_worker.start()
-        self._style_ka_chip(accent)
+        self._ka_label.setStyleSheet(
+            f"QLabel{{background:transparent;color:{accent};"
+            f"font-size:9px;font-weight:700;letter-spacing:1px;"
+            f"border:none;border-radius:4px;padding:2px 6px;}}"
+            f"QLabel:hover{{background:rgba(255,255,255,0.08);}}")
         self._ka_label.setToolTip("Keep-Alive: starting…")
 
         self.data["settings"]["keep_alive_enabled"] = True
@@ -370,19 +327,17 @@ class CommandCentreApp(QMainWindow):
             self._ka_worker.wait(2000)
             self._ka_worker = None
         self._ka_label.setText("KEEP-ALIVE")
-        self._style_ka_chip("#6b83a0")
+        self._ka_label.setStyleSheet(
+            "QLabel{background:transparent;color:#3a4e64;"
+            "font-size:9px;font-weight:700;letter-spacing:1px;"
+            "border:none;border-radius:4px;padding:2px 6px;}"
+            "QLabel:hover{background:rgba(255,255,255,0.06);color:#6b7f96;}")
         self._ka_found_state = None
         D.save(self.data)
 
         if show_toast:
             self.toast.show_toast('Keep-Alive OFF')
         self._ka_label.setToolTip("Keep-Alive: off")
-
-    def _style_ka_chip(self, color: str):
-        """Thin compatibility wrapper — the real styling logic now lives in
-        _style_status_chip, shared with the clock, so both can never drift
-        apart again."""
-        self._style_status_chip(self._ka_label, color)
 
     def _on_ka_status(self, msg: str):
         """Surface keep-alive activity — tooltip on the label shows last event."""
@@ -415,7 +370,11 @@ class CommandCentreApp(QMainWindow):
             self._ka_label.setToolTip("Keep-Alive · searching for POS Support GUI…")
 
         self._ka_found_state = found
-        self._style_ka_chip(col)
+        self._ka_label.setStyleSheet(
+            f"QLabel{{background:transparent;color:{col};"
+            f"font-size:9px;font-weight:700;letter-spacing:1px;"
+            f"border:none;border-radius:4px;padding:2px 6px;}}"
+            f"QLabel:hover{{background:rgba(255,255,255,0.08);}}")
 
     def _dot_btn(self, color: str, hover_color: str, tip: str, slot) -> QPushButton:
         """Coloured circle button — no symbol, pure macOS style."""
@@ -424,7 +383,7 @@ class CommandCentreApp(QMainWindow):
         b.setToolTip(tip)
         b.setCursor(Qt.CursorShape.PointingHandCursor)
         b.setStyleSheet(
-            f"QPushButton{{background:{color};border:none;border-radius:8px;}}"
+            f"QPushButton{{background:{color};border:none;border-radius:7px;}}"
             f"QPushButton:hover{{background:{hover_color};}}"
             f"QPushButton:pressed{{background:{hover_color}; opacity:0.7;}}")
         b.clicked.connect(slot)
@@ -433,75 +392,57 @@ class CommandCentreApp(QMainWindow):
     # ─────────────────────────────────────────────────────────────
     # NAV DROPDOWN
     # ─────────────────────────────────────────────────────────────
-    _NAV_ICONS = {
-        "commands": "❯", "analytics": "▤", "teams": "◈", "upgrades": "△",
-        "reminders": "◔", "macros": "◆", "history": "↺", "notepad": "▭",
-        "tickets": "▣", "vault": "▦", "settings": "◍", "ql": "»",
-    }
-
     def _make_nav_dropdown(self) -> QWidget:
-        """
-        A real floating popup menu — Qt.WindowType.Popup auto-closes on any
-        outside click, the same behaviour the approved design relies on.
-        Previously this built a full-width inline row that pushed the whole
-        window's content down when opened; now it's a compact vertical list
-        that overlays on top, exactly like the reference mockup's dropdown.
-        """
-        w = QWidget(self, Qt.WindowType.Popup | Qt.WindowType.FramelessWindowHint)
+        w = QWidget()
         w.setObjectName("NavDropdown")
-        # WA_StyledBackground is required for a plain QWidget to actually
-        # paint its own QSS background/border — without it the panel stays
-        # unpainted and whatever's behind it (search bar, pills) shows
-        # through, which is exactly the garbled overlap bug in the screenshot.
-        w.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
-        w.setStyleSheet(
-            "#NavDropdown{background:#0a0e16;"
-            "border:1px solid rgba(255,255,255,0.1);border-radius:11px;}")
-
-        outer = QVBoxLayout(w)
-        outer.setContentsMargins(6, 6, 6, 6)
-        outer.setSpacing(2)
+        w.setStyleSheet("background:rgba(8,13,22,0.88);""border-bottom:1px solid rgba(255,255,255,0.07);")
+        lay = QHBoxLayout(w)
+        lay.setContentsMargins(8, 6, 8, 6)
+        lay.setSpacing(3)
 
         self._nav_pill_btns = {}
+        from PyQt6.QtGui import QFontMetrics
+        _bold_fm = QFontMetrics(QFont("Inter", 9, QFont.Weight.Bold))
         for label, key in NAV_ITEMS:
-            btn = QPushButton(f"{self._NAV_ICONS.get(key,'•')}   {label}")
-            btn.setFixedHeight(32)
-            btn.setMinimumWidth(180)
-            btn.setFont(QFont("Inter", 10, QFont.Weight.Medium))
+            btn = QPushButton(label)
+            btn.setFixedHeight(26)
+            btn.setFont(QFont("Inter", 9, QFont.Weight.Medium))
             btn.setCursor(Qt.CursorShape.PointingHandCursor)
+            # Floor: never narrower than the bold label needs (no clip). The
+            # stretch factor below lets every pill grow equally to fill the
+            # whole row, so there's no empty gap on the right.
+            btn.setMinimumWidth(_bold_fm.horizontalAdvance(label) + 8)
+            from PyQt6.QtWidgets import QSizePolicy
+            btn.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
             btn.setStyleSheet(
-                "QPushButton{background:transparent;color:#a7b6c8;"
-                "border:none;border-radius:8px;padding:0 10px;"
-                "text-align:left;font-size:11.5px;}"
-                "QPushButton:hover{background:rgba(255,255,255,0.07);color:#eef3f7;}")
+                "QPushButton{"
+                "background:rgba(255,255,255,0.05);"
+                "color:#4a6070;"
+                "border:1px solid rgba(255,255,255,0.08);"
+                "border-radius:13px;"
+                "padding:2px 4px;"
+                "font-size:10px;"
+                "font-weight:500;"
+                "letter-spacing:0.2px;}"
+                "QPushButton:hover{"
+                "background:rgba(255,255,255,0.10);"
+                "color:#d4dfe9;"
+                "border-color:rgba(255,255,255,0.20);}")
             if key == "ql":
-                btn.clicked.connect(lambda: (self._toggle_quick_launch(), self._nav_dropdown.hide()))
+                btn.clicked.connect(self._toggle_quick_launch)
             else:
                 btn.clicked.connect(lambda checked, k=key: self._nav_select(k))
                 self._nav_pill_btns[key] = btn
-            outer.addWidget(btn)
-
-        # Keep the trigger's arrow in sync even when Qt's own Popup behaviour
-        # closes this (e.g. a click outside), not just our own toggle calls.
-        _orig_hide_event = w.hideEvent
-        def _on_hide(event):
-            self._nav_open = False
-            if hasattr(self, "_nav_btn"):
-                cur_label = dict(NAV_ITEMS).get(self._current_nav, self._current_nav.title())
-                self._nav_btn.setText(f"{cur_label.upper()}  ▾")
-            _orig_hide_event(event)
-        w.hideEvent = _on_hide
+            lay.addWidget(btn, 1)   # stretch factor 1 = equal share of the row
 
         return w
 
     # ─────────────────────────────────────────────────────────────
     def _build_panels(self):
-        from src.panels.upgrade_tracker_panel import UpgradeTrackerPanel
         for key, cls in [
             ("commands",  CommandsPanel),
             ("analytics", AnalyticsPanel),
             ("teams",     TeamAnalyticsPanel),
-            ("upgrades",  UpgradeTrackerPanel),
             ("reminders", RemindersPanel),
             ("macros",    MacrosPanel),
             ("history",   HistoryPanel),
@@ -528,39 +469,21 @@ class CommandCentreApp(QMainWindow):
 
         self._status_copies = QLabel("0 today  /  0 total")
         self._status_copies.setStyleSheet(
-            "background:transparent;color:#68809c;font-size:11px;font-weight:500;border:none;font-family:'Segoe UI Variable Text','Segoe UI Variable','Inter','Segoe UI',sans-serif;")
+            "background:transparent;color:#3d5068;font-size:11px;font-weight:500;border:none;font-family:'Segoe UI Variable Text','Segoe UI Variable','Inter','Segoe UI',sans-serif;")
         lay.addWidget(self._status_copies)
 
         self._shift_display = QLabel("")
         self._shift_display.setStyleSheet(
-            "background:transparent;color:#6e7d90;font-size:10px;"
+            "background:transparent;color:#4a5568;font-size:10px;"
             "font-family:'JetBrains Mono','Cascadia Code','Fira Code','Consolas',monospace;border:none;font-weight:600;")
         lay.addWidget(self._shift_display)
 
         lay.addStretch()
 
-        # Discoverable shortcuts hint (research: shortcuts are useless if hidden)
-        kb_hint = QLabel("⌨ ?")
-        kb_hint.setCursor(Qt.CursorShape.PointingHandCursor)
-        kb_hint.setToolTip("Keyboard shortcuts  (press ? or F1)")
-        kb_hint.setStyleSheet(
-            "QLabel{background:transparent;color:#6b83a0;font-size:11px;"
-            "font-weight:700;border:none;padding:1px 6px;border-radius:4px;}"
-            "QLabel:hover{background:rgba(255,255,255,0.06);color:#9fb0c4;}")
-        kb_hint.mousePressEvent = lambda e: (
-            self._shortcuts_overlay.show_overlay()
-            if hasattr(self, '_shortcuts_overlay') else None)
-        lay.addWidget(kb_hint)
-
-        sep0 = QLabel()
-        sep0.setFixedSize(1, 12)
-        sep0.setStyleSheet("background:#1f2d3d;")
-        lay.addWidget(sep0)
-
         self._status_theme = QLabel("DEFAULT")
         self._status_theme.setObjectName("StatusTheme")
         self._status_theme.setStyleSheet(
-            "background:transparent;color:#6e7d90;font-size:10px;"
+            "background:transparent;color:#4a5568;font-size:10px;"
             "font-weight:700;letter-spacing:1px;border:none;")
         lay.addWidget(self._status_theme)
 
@@ -572,7 +495,7 @@ class CommandCentreApp(QMainWindow):
 
         opc = QLabel("OPACITY")
         opc.setStyleSheet(
-            "background:transparent;color:#6e7d90;font-size:9px;"
+            "background:transparent;color:#4a5568;font-size:9px;"
             "font-weight:700;letter-spacing:1px;border:none;")
         lay.addWidget(opc)
 
@@ -589,24 +512,24 @@ class CommandCentreApp(QMainWindow):
     # NAVIGATION
     # ─────────────────────────────────────────────────────────────
     def _toggle_nav_dropdown(self):
-        if self._nav_dropdown.isVisible():
-            self._nav_dropdown.hide()
-            return
+        self._nav_open = not self._nav_open
+        label = dict((k, v) for v, k in [(v, k) for k, v in NAV_ITEMS]).get(
+            self._current_nav, self._current_nav.title())
+        arrow = "▴" if self._nav_open else "▾"
+        self._nav_btn.setText(f"{label.upper()}  {arrow}")
 
-        self._nav_open = True
-        label = dict(NAV_ITEMS).get(self._current_nav, self._current_nav.title())
-        self._nav_btn.setText(f"{label.upper()}  ▴")
-
-        # Show first, THEN measure+reposition — a widget's size isn't
-        # reliably realized before it's actually shown, which was causing
-        # the popup to appear at the wrong spot / wrong size on first open.
-        self._nav_dropdown.show()
-        self._nav_dropdown.adjustSize()
-        popup_w = self._nav_dropdown.width()
-        btn_center_x = self._nav_btn.mapToGlobal(QPoint(self._nav_btn.width() // 2, 0)).x()
-        btn_bottom_y = self._nav_btn.mapToGlobal(QPoint(0, self._nav_btn.height() + 6)).y()
-        self._nav_dropdown.move(btn_center_x - popup_w // 2, btn_bottom_y)
-        self._nav_dropdown.raise_()
+        anim = QPropertyAnimation(self._nav_dropdown, b"maximumHeight")
+        anim.setDuration(180)
+        anim.setEasingCurve(QEasingCurve.Type.OutCubic if self._nav_open
+                            else QEasingCurve.Type.InCubic)
+        if self._nav_open:
+            anim.setStartValue(0)
+            anim.setEndValue(44)
+        else:
+            anim.setStartValue(44)
+            anim.setEndValue(0)
+        anim.start()
+        self._nav_anim = anim
 
     def _nav_select(self, key: str):
         if self._nav_open:
@@ -620,7 +543,7 @@ class CommandCentreApp(QMainWindow):
         # empty page → blank screen. They also must NOT become _current_nav,
         # or a later theme re-apply (which calls _nav_to(_current_nav)) would
         # target the empty popout page and blank the main area.
-        _popout_keys = {'settings', 'vault', 'notepad', 'pcms', 'teams', 'upgrades'}
+        _popout_keys = {'settings', 'vault', 'notepad', 'pcms', 'teams'}
 
         panel = self._panels.get(key)
         if key in _popout_keys:
@@ -645,7 +568,7 @@ class CommandCentreApp(QMainWindow):
 
         p      = self._palette
         accent = p.get("accent", "#00e87a")
-        dim    = p.get("dim",    "#6e7d90")
+        dim    = p.get("dim",    "#4a5568")
         hover  = p.get("hover",  "#182030")
         card   = p.get("card",   "#111827")
         border = p.get("border", "#1f2d3d")
@@ -658,15 +581,15 @@ class CommandCentreApp(QMainWindow):
                     f"QPushButton{{background:qlineargradient(x1:0,y1:0,x2:1,y2:1,"
                     f"stop:0 {accent},stop:1 {p.get('accent2',p.get('blue',accent))});"
                     f"color:#060a10;border:none;"
-                    f"border-radius:12px;padding:2px 4px;font-size:10px;"
+                    f"border-radius:13px;padding:2px 4px;font-size:10px;"
                     f"font-weight:700;letter-spacing:0.2px;}}"
                     f"QPushButton:hover{{background:{accent};}}")
             else:
                 btn.setStyleSheet(
                     f"QPushButton{{background:rgba(255,255,255,0.05);"
-                    f"color:#6a869f;"
+                    f"color:#4a6070;"
                     f"border:1px solid rgba(255,255,255,0.08);"
-                    f"border-radius:12px;padding:2px 4px;"
+                    f"border-radius:13px;padding:2px 4px;"
                     f"font-size:10px;font-weight:500;letter-spacing:0.2px;}}"
                     f"QPushButton:hover{{background:rgba(255,255,255,0.10);"
                     f"color:{text};border-color:rgba(255,255,255,0.20);}}")
@@ -750,11 +673,9 @@ class CommandCentreApp(QMainWindow):
         # Aurora background follows the theme
         if hasattr(self, '_aurora'):
             self._aurora.set_palette(p)
-        if hasattr(self, '_shortcuts_overlay'):
-            self._shortcuts_overlay.set_accent(p.get("accent", "#00e87a"))
 
         accent = p.get("accent", "#00e87a")
-        dim    = p.get("dim",    "#6e7d90")
+        dim    = p.get("dim",    "#4a5568")
         panel  = p.get("panel",  "#0d1117")
         border = p.get("border", "#1f2d3d")
         card   = p.get("card",   "#111827")
@@ -764,31 +685,26 @@ class CommandCentreApp(QMainWindow):
 
         # Title bar
         self._accent_mark.setStyleSheet(
-            f"background:{accent}; border-radius:2px;")
-        if hasattr(self, '_accent_mark_glow'):
-            self._accent_mark_glow.setColor(QColor(accent))
+            f"background:{accent}; border-radius:1px;")
         _a2 = self._palette.get('accent2', accent)
         self._accent_line.set_accent(accent, _a2)
         # Gradient title — update every theme change
         if hasattr(self, '_gradient_title'):
             self._gradient_title.set_accent(accent, _a2)
             self._gradient_title.update()
-        if hasattr(self, '_wordmark'):
-            self._wordmark.set_accent(accent)
-        if hasattr(self, '_wordmark_glow'):
-            self._wordmark_glow.setColor(QColor(accent))
-        if hasattr(self, '_wordmark'):
-            self._wordmark.update()
 
-        # Clock — same shared chip helper as Keep-Alive, recoloured per theme
-        self._style_status_chip(self._clock, dim, mono=True)
+        # Clock and separators
+        self._clock.setStyleSheet(
+            f"background:transparent; color:{dim}; border:none;"
+            f"font-family:'JetBrains Mono','Cascadia Code','Fira Code','JetBrains Mono','Cascadia Code','Fira Code','Consolas',monospace;"
+            f"font-size:12px; font-weight:600;")
         for s in [self._s1, self._s2]:
             s.setStyleSheet(f"background:{border};")
 
         # Nav btn
         self._nav_btn.setStyleSheet(
             f"QPushButton{{background:{card};color:{text};border:1px solid {border};"
-            f"border-radius:8px;padding:0 10px;font-size:9px;font-weight:700;"
+            f"border-radius:7px;padding:0 10px;font-size:8px;font-weight:700;"
             f"letter-spacing:1px;}}"
             f"QPushButton:hover{{background:{hover};border-color:{dim};}}")
 
@@ -849,11 +765,11 @@ class CommandCentreApp(QMainWindow):
         # Pin button goes accent-coloured when active
         if aot:
             self._pin_btn.setStyleSheet(
-                f"QPushButton{{background:{accent};border:none;border-radius:8px;}}"
+                f"QPushButton{{background:{accent};border:none;border-radius:7px;}}"
                 f"QPushButton:hover{{background:{accent};}}")
         else:
             self._pin_btn.setStyleSheet(
-                "QPushButton{background:#fbbf24;border:none;border-radius:8px;}"
+                "QPushButton{background:#fbbf24;border:none;border-radius:7px;}"
                 "QPushButton:hover{background:#f59e0b;}")
         D.save(self.data)
 
@@ -1068,8 +984,6 @@ class CommandCentreApp(QMainWindow):
             self._panel_trans.resize(cw.size() if cw else self.size())
         if hasattr(self, '_copy_burst'):
             self._copy_burst.resize(self.size())
-        if hasattr(self, '_update_dialog') and self._update_dialog.isVisible():
-            self._update_dialog.setGeometry(self.rect())
 
     def showEvent(self, event):
         super().showEvent(event)
@@ -1077,61 +991,6 @@ class CommandCentreApp(QMainWindow):
         if hasattr(self, '_aurora') and cw:
             self._aurora.setGeometry(0, 0, cw.width(), cw.height())
             self._aurora.lower()
-    def keyPressEvent(self, event):
-        # ? or F1 → show the keyboard shortcuts reference (discoverability)
-        if event.key() in (Qt.Key.Key_Question, Qt.Key.Key_F1):
-            if hasattr(self, '_shortcuts_overlay'):
-                self._shortcuts_overlay.show_overlay()
-                return
-        super().keyPressEvent(event)
-
-    def _check_for_update(self, manual=False):
-        """
-        Check GitHub for a newer build.
-          • silent (startup): only speaks up if an update exists.
-          • manual (button):  also reports 'up to date' / errors, and shows a
-            'checking…' state so the user gets feedback either way.
-        """
-        try:
-            from src.updater import UpdateChecker, is_frozen, APP_VERSION
-            self._update_manual = manual
-
-            if manual and not is_frozen():
-                # Running from source — no exe to update. Be honest about it.
-                self.toast.show_toast("Updates only work in the built app")
-                return
-
-            if manual:
-                self.toast.show_toast("Checking for updates…")
-
-            self._update_checker = UpdateChecker()
-            self._update_checker.update_available.connect(self._on_update_available)
-            if manual:
-                self._update_checker.up_to_date.connect(self._on_up_to_date)
-                self._update_checker.check_failed.connect(self._on_check_failed)
-            self._update_checker.start()
-        except Exception as e:
-            if manual:
-                self.toast.show_toast("Update check failed")
-
-    def _on_update_available(self, url, when, size, digest):
-        if hasattr(self, "_update_dialog"):
-            self._update_dialog.set_accent(self._palette.get("accent", "#00e87a"))
-            self._update_dialog.offer(url, when, size, digest)
-
-    def _on_up_to_date(self):
-        # Only fires for a manual check (startup check leaves this unconnected).
-        from src.updater import APP_VERSION
-        self.toast.show_toast(f"You're up to date  ·  v{APP_VERSION}")
-
-    def check_for_update_manual(self):
-        """Public entry point for the Settings 'Check for updates' button."""
-        self._check_for_update(manual=True)
-
-    def _on_check_failed(self, msg):
-        # Only fires for a manual check.
-        self.toast.show_toast("Couldn't reach GitHub to check")
-
     def mousePressEvent(self, event):
         if event.button() == Qt.MouseButton.LeftButton and event.position().y() < 46:
             self._dragging = True

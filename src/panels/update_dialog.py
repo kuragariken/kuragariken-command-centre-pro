@@ -11,7 +11,6 @@ States:
 Styling follows CCP's aurora/glass language and the theme accent.
 """
 import math
-import os
 
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QGraphicsDropShadowEffect
@@ -288,15 +287,6 @@ class UpdateDialog(QWidget):
 
     def _start_download(self):
         from src.updater import UpdateDownloader
-        # Guard: never start a second download while one is already running.
-        # Without this, rapid or repeated clicks on "Update now" spawn multiple
-        # downloader threads (the "multiple instances" bug).
-        if getattr(self, "_downloading", False):
-            return
-        self._downloading = True
-
-        # Disable + hide the button so it can't be re-triggered at all.
-        self._update.setEnabled(False)
         self._title.setText("Downloading update…")
         self._sub.setText("Fetching the latest build. This won't touch your data.")
         self._later.hide(); self._update.hide()
@@ -330,34 +320,14 @@ class UpdateDialog(QWidget):
 
     def _finalize(self, temp_path):
         from src.updater import apply_update_and_relaunch
-        # Stop any known background QThread before quitting. QApplication.quit()
-        # only stops the Qt event loop — it does NOT kill running QThreads, and
-        # a still-running one (like Keep-Alive) can keep the underlying process
-        # alive indefinitely. The helper .bat waits for this exe's process to
-        # fully exit before it will swap the file, so a lingering thread here
-        # is exactly what causes the app to sit stuck on "Restarting…" forever.
-        if self._mw is not None:
-            try:
-                if getattr(self._mw, "_ka_worker", None) is not None:
-                    self._mw._stop_keep_alive()
-            except Exception:
-                pass
-
         ok = apply_update_and_relaunch(temp_path)
         if ok:
             from PyQt6.QtWidgets import QApplication
             QApplication.quit()
-            # Safety net: if some other thread we don't know about is still
-            # keeping the process alive a couple seconds after quit(), force
-            # it closed rather than let the update sit stuck forever. This is
-            # a hard process kill (skips normal Python cleanup) but only fires
-            # if graceful shutdown didn't already finish the job.
-            QTimer.singleShot(2500, lambda: os._exit(0))
         else:
             self._on_failed("Could not launch the update helper.")
 
     def _on_failed(self, msg):
-        self._downloading = False   # allow Retry to start a fresh download
         self._bar.hide(); self._pct.hide()
         self._title.setText("Update failed")
         self._sub.setText(f"{msg}\nYour current version is unchanged.")

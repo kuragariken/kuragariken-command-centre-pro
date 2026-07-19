@@ -122,52 +122,6 @@ def seed_path():
     return os.path.join(base, "seed_data.json")
 
 
-def _parse_hms(s):
-    """Parse an 'H:MM:SS' (or 'MM:SS') duration string into total seconds.
-    Returns None if it can't be parsed."""
-    if not s:
-        return None
-    parts = str(s).strip().split(":")
-    try:
-        parts = [int(p) for p in parts]
-    except ValueError:
-        return None
-    if len(parts) == 3:
-        h, m, sec = parts
-    elif len(parts) == 2:
-        h, m, sec = 0, parts[0], parts[1]
-    elif len(parts) == 1:
-        h, m, sec = 0, 0, parts[0]
-    else:
-        return None
-    return h * 3600 + m * 60 + sec
-
-
-# Auto-classify threshold: a 15_SP6 till whose last update is older than this
-# is treated as FAILED (it's on the new OS but stopped checking in).
-STALE_THRESHOLD_SECONDS = 90 * 60   # 1:30:00
-
-
-def classify_till(rec):
-    """
-    Decide a till's upgrade_status from its OS version + last-update time.
-      • OS_VER 15_SP6, updated within 1:30:00  -> UPGRADED
-      • OS_VER 15_SP6, updated over  1:30:00   -> FAILED (stale / dropped off)
-      • OS_VER 12_SP2                          -> PENDING (still on old OS)
-      • anything else                          -> unchanged (returns None)
-    Returns the new status string, or None to leave the status as-is.
-    """
-    os_ver = (rec.get("os_ver") or "").strip().upper()
-    if os_ver == "15_SP6":
-        secs = _parse_hms(rec.get("date_updated"))
-        if secs is not None and secs > STALE_THRESHOLD_SECONDS:
-            return "FAILED"
-        return "UPGRADED"
-    if os_ver == "12_SP2":
-        return "PENDING"
-    return None
-
-
 class Store:
     __slots__ = ("code", "notes", "tills")
     def __init__(self, code, notes="", tills=None):
@@ -303,13 +257,6 @@ class TrackerData(QObject):
                     "failure_type": g("POST/PRE CUTOVER FAILURE") or None,
                     "flag": None,
                 }
-                # Auto-classify from OS version + update time (overrides the
-                # dump's status per the upgrade rules).
-                auto = classify_till(rec)
-                if auto:
-                    rec["upgrade_status"] = auto
-                    if auto != "FAILED":
-                        rec["failure_type"] = None
                 touched.add(store_code)
                 if store_code not in self.stores:
                     self.stores[store_code] = Store(store_code)
@@ -374,11 +321,6 @@ class TrackerData(QObject):
                     "upgrade_status": upg, "failure_type": g("POST/PRE CUTOVER FAILURE") or None,
                     "flag": None,
                 }
-                auto = classify_till(rec)
-                if auto:
-                    rec["upgrade_status"] = auto
-                    if auto != "FAILED":
-                        rec["failure_type"] = None
                 touched.add(code)
                 existing = next((t for t in store.tills if t["till"] == till_num), None)
                 if existing:
@@ -712,22 +654,6 @@ class DashboardPanel(QWidget):
         sep = QFrame(); sep.setFixedHeight(1); sep.setStyleSheet(f"background:{SEP};border:none;")
         ov_l.addWidget(sep)
         ov_l.addSpacing(4)
-
-        # Pre/Post cutover failure breakdown (from each till's failure_type)
-        for key, label, color in [("pre","Pre-cutover failures",AMB),
-                                    ("post","Post-cutover failures",RED)]:
-            crow = QHBoxLayout(); crow.setSpacing(10)
-            dot = QLabel("◆"); dot.setStyleSheet(f"color:{color};font-size:11px;background:transparent;border:none;")
-            crow.addWidget(dot)
-            crow.addWidget(make_label(label, T2, 12), 1)
-            cval = make_label("—", color, 20, bold=True, mono=True)
-            crow.addWidget(cval)
-            ov_l.addLayout(crow)
-            self._ov_rows[key] = cval
-        ov_l.addSpacing(4)
-        sep2 = QFrame(); sep2.setFixedHeight(1); sep2.setStyleSheet(f"background:{SEP};border:none;")
-        ov_l.addWidget(sep2)
-        ov_l.addSpacing(4)
         tot_row = QHBoxLayout()
         tot_row.addWidget(make_label("Total stores tracked", T3, 11), 1)
         self._ov_total = make_label("—", T1, 20, bold=True, mono=True)
@@ -757,21 +683,14 @@ class DashboardPanel(QWidget):
         self._donut.set_data([(up, GRN), (fa, RED), (pe, AMB)], f"{tot}")
 
         complete = attention = failing = 0
-        pre = post = 0
         for s in self.data.stores.values():
             u, f, p = s.counts()
             if f > 0: failing += 1
             elif p > 0: attention += 1
             else: complete += 1
-            for t in s.tills:
-                ft = (t.get("failure_type") or "").upper()
-                if ft == "PRE.CUTOVER": pre += 1
-                elif ft == "POST.CUTOVER": post += 1
         self._ov_rows["complete"].setText(str(complete))
         self._ov_rows["attention"].setText(str(attention))
         self._ov_rows["failing"].setText(str(failing))
-        self._ov_rows["pre"].setText(str(pre))
-        self._ov_rows["post"].setText(str(post))
         self._ov_total.setText(str(len(self.data.stores)))
 
         # Clear and rebuild the per-store bar chart, worst-first (most pending+failed)
@@ -861,21 +780,6 @@ class TillRow(QFrame):
         lay.addWidget(make_label(till_rec.get("last_status","") or "—", T2, 9), 1)
         lay.addWidget(make_label(till_rec.get("till_ip","") or "—", T3, FS_SMALL, mono=True), 0)
         lay.addWidget(make_label(till_rec.get("pos_version","") or "—", T3, FS_SMALL, mono=True), 0)
-
-        # OS version — colour-coded: 15_SP6 (new) green-ish, 12_SP2 (old) amber
-        osv = (till_rec.get("os_ver","") or "").strip() or "—"
-        os_color = GRN if osv.upper() == "15_SP6" else (AMB if osv.upper() == "12_SP2" else T3)
-        os_lbl = make_label(osv, os_color, FS_SMALL, mono=True, bold=True)
-        os_lbl.setFixedWidth(58); os_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        lay.addWidget(os_lbl, 0)
-
-        # Uptime / time since last update (H:MM:SS). Amber if stale (>1:30:00).
-        upt = (till_rec.get("date_updated","") or "").strip() or "—"
-        upt_secs = _parse_hms(upt)
-        upt_color = AMB if (upt_secs is not None and upt_secs > STALE_THRESHOLD_SECONDS) else T3
-        upt_lbl = make_label(upt, upt_color, FS_SMALL, mono=True)
-        upt_lbl.setFixedWidth(62); upt_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        lay.addWidget(upt_lbl, 0)
 
         self._status_btn = QToolButton()
         self._status_btn.setText(till_rec.get("upgrade_status","PENDING"))
@@ -985,15 +889,6 @@ class StoreDetailPanel(QWidget):
         fa_btn = Btn("Failed", RED, h=28); fa_btn.clicked.connect(lambda: self._bulk_set("FAILED"))
         pe_btn = Btn("Pending", AMB, h=28); pe_btn.clicked.connect(lambda: self._bulk_set("PENDING"))
         for b in [up_btn, fa_btn, pe_btn]: bl.addWidget(b)
-
-        # separator between status actions and the copy action
-        sep = QLabel(); sep.setFixedSize(1, 20)
-        sep.setStyleSheet(f"background:{SEP};")
-        bl.addWidget(sep)
-
-        self._copy_ips_btn = Btn("⧉  Copy IPs", CY, h=28)
-        self._copy_ips_btn.clicked.connect(self._copy_selected_ips)
-        bl.addWidget(self._copy_ips_btn)
         root.addWidget(bar)
 
         scroll = QScrollArea(); scroll.setWidgetResizable(True); scroll.setFrameShape(QFrame.Shape.NoFrame)
@@ -1025,46 +920,6 @@ class StoreDetailPanel(QWidget):
             self._till_layout.addWidget(row)
             self._rows[t["till"]] = row
         self._till_layout.addStretch()
-
-    def _copy_selected_ips(self):
-        if not self._selected or not self.code:
-            self._flash_copy_btn("Select tills first", RED)
-            return
-        store = self.data.stores.get(self.code)
-        if not store:
-            return
-        # Collect IPs for the selected tills, preserving till order, skipping blanks.
-        ips = []
-        for t in sorted(store.tills, key=lambda x: x["till"]):
-            if t["till"] in self._selected:
-                ip = (t.get("till_ip") or "").strip()
-                if ip and ip != "—":
-                    ips.append(ip)
-        if not ips:
-            self._flash_copy_btn("No IPs found", RED)
-            return
-        from PyQt6.QtWidgets import QApplication
-        QApplication.clipboard().setText("\n".join(ips))
-        self._flash_copy_btn(f"✓ Copied {len(ips)} IP{'s' if len(ips) != 1 else ''}", GRN)
-
-    def _flash_copy_btn(self, msg, color):
-        """Briefly recolor + relabel the copy button as feedback, then restore."""
-        h = 28
-        self._copy_ips_btn.setText(msg)
-        self._copy_ips_btn.setStyleSheet(f"""
-            QPushButton{{background:{color}26;border:1px solid {color};color:{color};
-                border-radius:{h//2}px;padding:0 14px;font-size:12px;font-weight:600;}}
-        """)
-        def _restore():
-            self._copy_ips_btn.setText("⧉  Copy IPs")
-            self._copy_ips_btn.setStyleSheet(f"""
-                QPushButton{{background:{rgba(BG3,130)};border:1px solid {CY}55;color:{CY};
-                    border-radius:{h//2}px;padding:0 14px;font-size:12px;font-weight:600;}}
-                QPushButton:hover{{background:{CY}26;border-color:{CY};}}
-                QPushButton:pressed{{background:{CY}44;}}
-            """)
-        from PyQt6.QtCore import QTimer
-        QTimer.singleShot(1400, _restore)
 
     def _on_row_selection_changed(self, till, checked):
         if checked: self._selected.add(till)
@@ -1536,25 +1391,6 @@ class SharePanel(QWidget):
             self._status_lbl.setStyleSheet(f"color:{RED};font-size:11px;background:transparent;border:none;")
             self._status_lbl.setText(f"Export failed: {e}")
 
-    def _safe_sheet_name(self, code, used):
-        """Excel sheet titles can't contain  / \\ ? * [ ] :  , can't exceed 31
-        chars, and must be unique. Sanitize and de-dupe so export never crashes
-        on a real store code."""
-        name = code or "STORE"
-        for ch in "/\\?*[]:":
-            name = name.replace(ch, "-")
-        name = name.strip() or "STORE"
-        name = name[:31]
-        # ensure uniqueness (two codes can collide after truncation/sanitizing)
-        if name in used:
-            base = name[:28]
-            n = 2
-            while f"{base}_{n}" in used and n < 999:
-                n += 1
-            name = f"{base}_{n}"
-        used.add(name)
-        return name
-
     def _write_xlsx(self, path):
         import openpyxl
         from openpyxl.styles import Font, PatternFill, Alignment
@@ -1572,9 +1408,8 @@ class SharePanel(QWidget):
         for i, w in enumerate([10,11,13,10,9,9,10,50], start=1):
             ws.column_dimensions[chr(64+i)].width = w
 
-        used_names = {"SUMMARY"}
         for s in sorted(self.data.stores.values(), key=lambda s: s.code):
-            sh = wb.create_sheet(self._safe_sheet_name(s.code, used_names))
+            sh = wb.create_sheet(s.code[:31])
             sh.append(["TILL NUMBER","LAST STATUS","CACHE STATUS","CACHE DETAIL","DATE UPDATED",
                        "POS VERSION","TILL IP","OS_VER","UPGRADE STATUS","POST/PRE CUTOVER FAILURE"])
             for c in sh[1]: c.font = Font(bold=True, name="Arial")

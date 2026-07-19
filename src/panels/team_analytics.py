@@ -20,8 +20,7 @@ from PyQt6.QtWidgets import (
     QLineEdit, QScrollArea, QFrame, QSizeGrip
 )
 from PyQt6.QtCore import (
-    Qt, QTimer, QRectF, QPoint, QPropertyAnimation, QEasingCurve, pyqtProperty,
-    pyqtSignal
+    Qt, QTimer, QRectF, QPoint, QPropertyAnimation, QEasingCurve, pyqtProperty
 )
 from PyQt6.QtGui import QPainter, QColor, QPen, QPainterPath, QLinearGradient, QRadialGradient, QBrush
 
@@ -40,33 +39,6 @@ TEAM_COLORS = {
     "POS Support": "#38bdf8",   # blue
     "POS EFT":     "#a78bfa",   # violet
 }
-
-# Friendly labels for the 9 open RequestStatus values (confirmed directly
-# against this 4me instance's own enum — see xurrent_client.build_open_count_query).
-STATUS_LABELS = {
-    "on_backlog":           "On backlog",
-    "assigned":             "Assigned",
-    "accepted":             "Accepted",
-    "in_progress":          "In progress",
-    "waiting_for":          "Waiting for",
-    "waiting_for_customer": "Waiting for customer",
-    "reservation_pending":  "Reservation pending",
-    "workflow_pending":     "Workflow pending",
-    "project_pending":      "Project pending",
-}
-# Display order — roughly the lifecycle order a call moves through.
-STATUS_ORDER = list(STATUS_LABELS.keys())
-
-
-class _ClickableBox(QWidget):
-    """A QWidget that behaves like a button — used for the open-call badges
-    so clicking one toggles its per-status breakdown."""
-    clicked = pyqtSignal()
-
-    def mousePressEvent(self, event):
-        if event.button() == Qt.MouseButton.LeftButton:
-            self.clicked.emit()
-        super().mousePressEvent(event)
 
 
 # ── tiny sparkline / trend line ───────────────────────────────────────────────
@@ -1080,22 +1052,6 @@ class TeamAnalyticsWindow(QWidget):
                 "QLineEdit::placeholder{color:#6b83a0;}")
 
     def _build_dashboard(self):
-        from PyQt6.QtWidgets import QTabWidget
-        tabs = QTabWidget()
-        tabs.setStyleSheet(
-            "QTabWidget::pane{border:none;}"
-            "QTabBar::tab{background:transparent;color:#6d84a0;padding:8px 16px;"
-            "font-size:11px;font-weight:700;border:none;border-bottom:2px solid transparent;}"
-            "QTabBar::tab:selected{color:#38bdf8;border-bottom:2px solid #38bdf8;}"
-            "QTabBar::tab:hover{color:#a7b6c8;}")
-        overview_page = QWidget()
-        self._overview_layout = QVBoxLayout(overview_page)
-        self._overview_layout.setContentsMargins(4, 12, 4, 4)
-        self._overview_layout.setSpacing(16)
-        tabs.addTab(overview_page, "Overview")
-        self._root.addWidget(tabs)
-        self._build_store_till_tab(tabs)
-
         # ── HERO BAND ──────────────────────────────────────────────
         hero = QWidget()
         hero.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
@@ -1142,74 +1098,7 @@ class TeamAnalyticsWindow(QWidget):
         tagline.setStyleSheet(
             "background:transparent;color:#6d84a0;font-size:10px;border:none;")
         hv.addWidget(tagline)
-
-        # ── Open-call counters (live count of unresolved requests per team) ──
-        # Click a badge to expand its per-status breakdown.
-        open_row = QHBoxLayout()
-        open_row.setSpacing(10)
-        open_row.setContentsMargins(0, 8, 0, 0)
-
-        self._open_breakdown_data = {}   # team -> {status: count}
-        self._open_breakdown_panels = {}
-        self._open_expanded = {"POS Support": False, "POS EFT": False}
-
-        def _open_badge(team_key):
-            color = TEAM_COLORS[team_key]
-            box = _ClickableBox()
-            box.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
-            box.setCursor(Qt.CursorShape.PointingHandCursor)
-            box.setStyleSheet(
-                f"background:rgba(255,255,255,0.03);"
-                f"border:1px solid {color}44;border-radius:10px;")
-            bl = QHBoxLayout(box)
-            bl.setContentsMargins(12, 6, 12, 6); bl.setSpacing(8)
-            dot = QLabel("●")
-            dot.setStyleSheet(f"background:transparent;color:{color};"
-                              f"font-size:9px;border:none;")
-            name = QLabel(team_key)
-            name.setStyleSheet(
-                f"background:transparent;color:{color};font-size:11px;"
-                f"font-weight:800;letter-spacing:0.5px;border:none;")
-            count = QLabel("—")
-            count.setStyleSheet(
-                f"background:transparent;color:#e8eef5;font-size:18px;"
-                f"font-weight:900;border:none;font-family:{MONO};")
-            lbl = QLabel("open")
-            lbl.setStyleSheet(
-                "background:transparent;color:#6d84a0;font-size:10px;"
-                "font-weight:600;border:none;")
-            chevron = QLabel("▾")
-            chevron.setStyleSheet(
-                "background:transparent;color:#4a5b70;font-size:10px;border:none;")
-            bl.addWidget(dot); bl.addWidget(name)
-            bl.addStretch()
-            bl.addWidget(count); bl.addWidget(lbl); bl.addWidget(chevron)
-            box.clicked.connect(lambda t=team_key: self._toggle_open_breakdown(t))
-            return box, count, chevron
-
-        sup_box, self._open_sup, self._open_sup_chev = _open_badge("POS Support")
-        eft_box, self._open_eft, self._open_eft_chev = _open_badge("POS EFT")
-        open_row.addWidget(sup_box, 1)
-        open_row.addWidget(eft_box, 1)
-        hv.addLayout(open_row)
-
-        # Breakdown panels — hidden until their badge is clicked.
-        panel_row = QHBoxLayout()
-        panel_row.setSpacing(10)
-        for team_key in ("POS Support", "POS EFT"):
-            panel = QWidget()
-            panel.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
-            panel.setStyleSheet(
-                "background:rgba(255,255,255,0.02);border:1px solid #1c2b42;"
-                "border-radius:10px;")
-            panel.setVisible(False)
-            pl = QVBoxLayout(panel)
-            pl.setContentsMargins(12, 8, 12, 8); pl.setSpacing(4)
-            self._open_breakdown_panels[team_key] = (panel, pl)
-            panel_row.addWidget(panel, 1)
-        hv.addLayout(panel_row)
-
-        self._overview_layout.addWidget(hero)
+        self._root.addWidget(hero)
 
         # ── control row: period toggle + status + refresh ──
         header = QHBoxLayout()
@@ -1257,16 +1146,16 @@ class TeamAnalyticsWindow(QWidget):
         header.addSpacing(6)
         header.addWidget(refresh)
 
-        self._overview_layout.addLayout(header)
+        self._root.addLayout(header)
         self._style_period_btns()
 
         # ── at-a-glance: Today / Week / Month totals for both teams ──
         self._glance = PeriodGlance()
-        self._overview_layout.addWidget(self._glance)
+        self._root.addWidget(self._glance)
 
         # ── head-to-head scoreboard (the verdict strip) ──
         self._scoreboard = Scoreboard()
-        self._overview_layout.addWidget(self._scoreboard)
+        self._root.addWidget(self._scoreboard)
 
         # ── two team cards side by side ──
         cards_row = QHBoxLayout()
@@ -1276,7 +1165,7 @@ class TeamAnalyticsWindow(QWidget):
             c = TeamCard(team)
             self._team_cards[team] = c
             cards_row.addWidget(c, 1)
-        self._overview_layout.addLayout(cards_row, 1)
+        self._root.addLayout(cards_row, 1)
 
         # ── trend line ──
         trend_wrap = QWidget()
@@ -1296,7 +1185,7 @@ class TeamAnalyticsWindow(QWidget):
         self._trend = TrendLine()
         self._trend.setMinimumHeight(220)
         tw.addWidget(self._trend)
-        self._overview_layout.addWidget(trend_wrap)
+        self._root.addWidget(trend_wrap)
 
         # ── cross-team handoffs — compact one-liner ──
         self._handoff = QLabel("")
@@ -1309,7 +1198,7 @@ class TeamAnalyticsWindow(QWidget):
             "(4me assignmentCount > 1). The API exposes how many times a ticket "
             "was reassigned, not the direction, so this shows which team received "
             "reassigned work, not who sent it.")
-        self._overview_layout.addWidget(self._handoff)
+        self._root.addWidget(self._handoff)
 
         # sign-out (small)
         foot = QHBoxLayout()
@@ -1321,7 +1210,7 @@ class TeamAnalyticsWindow(QWidget):
             "font-size:10px;} QPushButton:hover{color:#f87171;}")
         out.clicked.connect(self._disconnect)
         foot.addWidget(out)
-        self._overview_layout.addLayout(foot)
+        self._root.addLayout(foot)
 
     # ── period + styling ─────────────────────────────────────────
     def _set_period(self, key):
@@ -1336,394 +1225,6 @@ class TeamAnalyticsWindow(QWidget):
         if hasattr(self, "_trend"):
             self._refresh_trend()
         self._fetch()
-
-    def _build_store_till_tab(self, tabs):
-        page = QWidget()
-        layout = QVBoxLayout(page)
-        layout.setContentsMargins(4, 12, 4, 4)
-        layout.setSpacing(14)
-
-        title = QLabel("STORE & TILL BREAKDOWN")
-        title.setStyleSheet(
-            "background:transparent;color:#8ba0b6;font-size:11px;"
-            "font-weight:800;letter-spacing:1.5px;border:none;")
-        layout.addWidget(title)
-        sub = QLabel(
-            "Classifies every call by store format (Hyper / Express / Local "
-            "/ Liquor / Clothing, read from the requester's name) and till "
-            "parity (from the Till Number field). Pick a team and period, "
-            "then load and export.")
-        sub.setWordWrap(True)
-        sub.setStyleSheet(
-            "background:transparent;color:#6d84a0;font-size:10px;border:none;")
-        layout.addWidget(sub)
-
-        controls = QHBoxLayout()
-        controls.setSpacing(8)
-
-        self._bd_team = "POS Support"
-        self._bd_team_btns = {}
-        for team in TEAM_IDS:
-            b = QPushButton(team)
-            b.setCursor(Qt.CursorShape.PointingHandCursor)
-            b.setFixedHeight(30)
-            b.clicked.connect(lambda _, t=team: self._set_breakdown_team(t))
-            self._bd_team_btns[team] = b
-            controls.addWidget(b)
-
-        controls.addSpacing(12)
-
-        self._bd_period = "month"
-        self._bd_period_btns = {}
-        for key, label in [("today", "Today"), ("week", "This Week"), ("month", "This Month")]:
-            b = QPushButton(label)
-            b.setCursor(Qt.CursorShape.PointingHandCursor)
-            b.setFixedHeight(30)
-            b.clicked.connect(lambda _, k=key: self._set_breakdown_period(k))
-            self._bd_period_btns[key] = b
-            controls.addWidget(b)
-
-        controls.addStretch()
-
-        load_btn = QPushButton("⟳  Load")
-        load_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        load_btn.setFixedHeight(30)
-        load_btn.clicked.connect(self._fetch_calls_breakdown)
-        load_btn.setStyleSheet(
-            "QPushButton{background:rgba(56,189,248,0.12);color:#38bdf8;"
-            "border:1px solid rgba(56,189,248,0.35);border-radius:8px;"
-            "padding:0 14px;font-size:11px;font-weight:700;}"
-            "QPushButton:hover{background:rgba(56,189,248,0.2);}"
-            "QPushButton:disabled{color:#3a4a5c;border-color:#1c2b42;}")
-        controls.addWidget(load_btn)
-        self._bd_load_btn = load_btn
-
-        layout.addLayout(controls)
-
-        self._bd_status = QLabel(
-            "Click Load to fetch call data for the selected team and period.")
-        self._bd_status.setWordWrap(True)
-        self._bd_status.setStyleSheet(
-            "background:transparent;color:#6d84a0;font-size:10px;border:none;")
-        layout.addWidget(self._bd_status)
-
-        # ── filters: narrow both the summary AND the export ──
-        self._bd_all_formats = ["Hyper", "Express", "Local", "Liquor", "Clothing", "Other", "Unknown"]
-        self._bd_all_parities = ["Odd", "Even", "Unknown"]
-        self._bd_format_filter = set(self._bd_all_formats)   # all active by default
-        self._bd_parity_filter = set(self._bd_all_parities)
-        self._bd_format_chips = {}
-        self._bd_parity_chips = {}
-
-        filter_wrap = QWidget()
-        fw = QVBoxLayout(filter_wrap)
-        fw.setContentsMargins(0, 4, 0, 4); fw.setSpacing(6)
-
-        fmt_row = QHBoxLayout(); fmt_row.setSpacing(6)
-        fmt_lbl = QLabel("Format:")
-        fmt_lbl.setStyleSheet(
-            "background:transparent;color:#6d84a0;font-size:10px;"
-            "font-weight:700;border:none;")
-        fmt_row.addWidget(fmt_lbl)
-        for fmt in self._bd_all_formats:
-            chip = QPushButton(fmt)
-            chip.setCheckable(True)
-            chip.setChecked(True)
-            chip.setCursor(Qt.CursorShape.PointingHandCursor)
-            chip.setFixedHeight(24)
-            chip.clicked.connect(lambda _, f=fmt: self._toggle_bd_filter("format", f))
-            self._bd_format_chips[fmt] = chip
-            fmt_row.addWidget(chip)
-        fmt_row.addStretch()
-        fw.addLayout(fmt_row)
-
-        par_row = QHBoxLayout(); par_row.setSpacing(6)
-        par_lbl = QLabel("Till parity:")
-        par_lbl.setStyleSheet(
-            "background:transparent;color:#6d84a0;font-size:10px;"
-            "font-weight:700;border:none;")
-        par_row.addWidget(par_lbl)
-        for parity in self._bd_all_parities:
-            chip = QPushButton(parity)
-            chip.setCheckable(True)
-            chip.setChecked(True)
-            chip.setCursor(Qt.CursorShape.PointingHandCursor)
-            chip.setFixedHeight(24)
-            chip.clicked.connect(lambda _, p=parity: self._toggle_bd_filter("parity", p))
-            self._bd_parity_chips[parity] = chip
-            par_row.addWidget(chip)
-        par_row.addStretch()
-        clear_btn = QPushButton("Clear filters")
-        clear_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        clear_btn.setFixedHeight(24)
-        clear_btn.clicked.connect(self._clear_bd_filters)
-        clear_btn.setStyleSheet(
-            "QPushButton{background:transparent;color:#6d84a0;border:1px solid #1f2d3d;"
-            "border-radius:8px;padding:0 10px;font-size:10px;}"
-            "QPushButton:hover{color:#d4dfe9;border-color:#6b83a0;}")
-        par_row.addWidget(clear_btn)
-        fw.addLayout(par_row)
-
-        layout.addWidget(filter_wrap)
-        self._style_bd_chips()
-
-        # ── summary: format counts + parity counts side by side ──
-        summary_row = QHBoxLayout()
-        summary_row.setSpacing(12)
-
-        def _summary_card(title_text):
-            card = QWidget()
-            card.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
-            card.setStyleSheet(
-                "background:rgba(255,255,255,0.02);border:1px solid #1c2b42;"
-                "border-radius:12px;")
-            cl = QVBoxLayout(card)
-            cl.setContentsMargins(14, 12, 14, 12); cl.setSpacing(6)
-            t = QLabel(title_text)
-            t.setStyleSheet(
-                "background:transparent;color:#6d84a0;font-size:10px;"
-                "font-weight:800;letter-spacing:1px;border:none;")
-            cl.addWidget(t)
-            inner = QVBoxLayout(); inner.setSpacing(4)
-            cl.addLayout(inner)
-            return card, inner
-
-        fmt_card, self._bd_fmt_layout = _summary_card("BY FORMAT")
-        par_card, self._bd_par_layout = _summary_card("BY TILL PARITY")
-        summary_row.addWidget(fmt_card, 1)
-        summary_row.addWidget(par_card, 1)
-        layout.addLayout(summary_row)
-
-        export_btn = QPushButton("⬇  Export to Excel")
-        export_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        export_btn.setFixedHeight(34)
-        export_btn.setEnabled(False)
-        export_btn.clicked.connect(self._export_calls_breakdown_xlsx)
-        export_btn.setStyleSheet(
-            "QPushButton{background:rgba(0,232,122,0.12);color:#00e87a;"
-            "border:1px solid rgba(0,232,122,0.35);border-radius:8px;"
-            "font-size:12px;font-weight:700;}"
-            "QPushButton:disabled{color:#3a4a5c;border-color:#1c2b42;"
-            "background:transparent;}"
-            "QPushButton:hover:!disabled{background:rgba(0,232,122,0.2);}")
-        layout.addWidget(export_btn)
-        self._bd_export_btn = export_btn
-
-        layout.addStretch()
-        tabs.addTab(page, "Store & Till")
-
-        self._calls_breakdown_data = {}
-        self._style_breakdown_btns()
-
-    def _style_bd_chips(self):
-        def _style_chip(chip, active):
-            if active:
-                chip.setStyleSheet(
-                    "QPushButton{background:rgba(56,189,248,0.18);color:#38bdf8;"
-                    "border:1px solid #38bdf8;border-radius:8px;padding:0 10px;"
-                    "font-size:10px;font-weight:700;}")
-            else:
-                chip.setStyleSheet(
-                    "QPushButton{background:transparent;color:#4a5b70;"
-                    "border:1px solid #1c2b42;border-radius:8px;padding:0 10px;"
-                    "font-size:10px;}"
-                    "QPushButton:hover{color:#6d84a0;}")
-        for fmt, chip in self._bd_format_chips.items():
-            _style_chip(chip, fmt in self._bd_format_filter)
-        for parity, chip in self._bd_parity_chips.items():
-            _style_chip(chip, parity in self._bd_parity_filter)
-
-    def _toggle_bd_filter(self, kind, value):
-        target = self._bd_format_filter if kind == "format" else self._bd_parity_filter
-        if value in target:
-            target.discard(value)
-        else:
-            target.add(value)
-        self._style_bd_chips()
-        self._render_breakdown_summary()
-
-    def _clear_bd_filters(self):
-        self._bd_format_filter = set(self._bd_all_formats)
-        self._bd_parity_filter = set(self._bd_all_parities)
-        for chip in list(self._bd_format_chips.values()) + list(self._bd_parity_chips.values()):
-            chip.setChecked(True)
-        self._style_bd_chips()
-        self._render_breakdown_summary()
-
-    def _filtered_calls(self):
-        """The selected team's calls, narrowed by the active format/parity
-        filter chips. Both the on-screen summary and the export use this same
-        list, so what you see is exactly what you'd get in the spreadsheet."""
-        data = getattr(self, "_calls_breakdown_data", {}).get(self._bd_team)
-        if not data:
-            return []
-        return [c for c in data["calls"]
-                if c["format"] in self._bd_format_filter
-                and c["parity"] in self._bd_parity_filter]
-
-    def _style_breakdown_btns(self):
-        for team, b in getattr(self, "_bd_team_btns", {}).items():
-            color = TEAM_COLORS[team]
-            if team == self._bd_team:
-                b.setStyleSheet(
-                    f"QPushButton{{background:{color};color:#060a10;"
-                    f"border:none;border-radius:8px;padding:0 14px;"
-                    f"font-size:11px;font-weight:700;}}")
-            else:
-                b.setStyleSheet(
-                    "QPushButton{background:transparent;color:#6d84a0;"
-                    "border:1px solid #1f2d3d;border-radius:8px;"
-                    "padding:0 14px;font-size:11px;}"
-                    "QPushButton:hover{color:#d4dfe9;border-color:#6b83a0;}")
-        for key, b in getattr(self, "_bd_period_btns", {}).items():
-            if key == self._bd_period:
-                b.setStyleSheet(
-                    "QPushButton{background:qlineargradient(x1:0,y1:0,x2:1,y2:1,"
-                    "stop:0 #38bdf8,stop:1 #a78bfa);color:#060a10;border:none;"
-                    "border-radius:8px;padding:0 14px;font-size:10px;font-weight:700;}")
-            else:
-                b.setStyleSheet(
-                    "QPushButton{background:transparent;color:#6d84a0;"
-                    "border:1px solid #1f2d3d;border-radius:8px;"
-                    "padding:0 14px;font-size:10px;}"
-                    "QPushButton:hover{color:#d4dfe9;border-color:#6b83a0;}")
-
-    def _set_breakdown_team(self, team):
-        self._bd_team = team
-        self._style_breakdown_btns()
-        self._render_breakdown_summary()
-
-    def _set_breakdown_period(self, key):
-        self._bd_period = key
-        self._style_breakdown_btns()
-        self._bd_export_btn.setEnabled(False)
-        self._bd_status.setText("Period changed — click Load to refresh.")
-
-    def _fetch_calls_breakdown(self):
-        if not self._token or not self._account:
-            return
-        from PyQt6.QtCore import QThread, pyqtSignal
-
-        class _BreakdownWorker(QThread):
-            done = pyqtSignal(dict)
-            error = pyqtSignal(str)
-            def __init__(self, token, account, start_date):
-                super().__init__()
-                self.token = token; self.account = account
-                self.start_date = start_date
-            def run(self):
-                try:
-                    from src.widgets.xurrent_client import fetch_calls_breakdown
-                    self.done.emit(
-                        fetch_calls_breakdown(self.token, self.account, self.start_date))
-                except Exception as e:
-                    self.error.emit(str(e))
-
-        self._bd_load_btn.setEnabled(False)
-        self._bd_status.setText("Loading — this can take a moment for a full month…")
-        start_date = self._start_date(self._bd_period)
-        self._bd_worker = _BreakdownWorker(self._token, self._account, start_date)
-        self._bd_worker.done.connect(self._on_calls_breakdown)
-        self._bd_worker.error.connect(self._on_calls_breakdown_error)
-        self._bd_worker.start()
-
-    def _on_calls_breakdown(self, data):
-        self._calls_breakdown_data = data
-        self._bd_load_btn.setEnabled(True)
-        total = sum(v.get("total", 0) for v in data.values())
-        self._bd_status.setText(f"Loaded {total} calls across both teams.")
-        self._bd_export_btn.setEnabled(True)
-        self._render_breakdown_summary()
-
-    def _on_calls_breakdown_error(self, msg):
-        self._bd_load_btn.setEnabled(True)
-        short = (msg[:100] + "…") if len(msg) > 100 else msg
-        self._bd_status.setText(f"Couldn't load: {short}")
-        self._bd_export_btn.setEnabled(False)
-
-    def _render_breakdown_summary(self):
-        for lay in (getattr(self, "_bd_fmt_layout", None), getattr(self, "_bd_par_layout", None)):
-            if lay is None:
-                continue
-            while lay.count():
-                item = lay.takeAt(0)
-                if item and item.widget():
-                    item.widget().deleteLater()
-
-        if self._bd_team not in getattr(self, "_calls_breakdown_data", {}):
-            return
-        calls = self._filtered_calls()
-        color = TEAM_COLORS[self._bd_team]
-
-        format_counts = {}
-        parity_counts = {}
-        for c in calls:
-            format_counts[c["format"]] = format_counts.get(c["format"], 0) + 1
-            parity_counts[c["parity"]] = parity_counts.get(c["parity"], 0) + 1
-
-        for fmt in ("Hyper", "Express", "Local", "Liquor", "Clothing", "Other", "Unknown"):
-            n = format_counts.get(fmt, 0)
-            if n:
-                self._add_breakdown_row(self._bd_fmt_layout, fmt, n, color)
-        for parity in ("Odd", "Even", "Unknown"):
-            n = parity_counts.get(parity, 0)
-            if n:
-                self._add_breakdown_row(self._bd_par_layout, parity, n, color)
-
-        if not calls:
-            empty = QLabel("No calls match the current filters.")
-            empty.setStyleSheet(
-                "background:transparent;color:#6d84a0;font-size:10px;border:none;")
-            self._bd_fmt_layout.addWidget(empty)
-
-    def _export_calls_breakdown_xlsx(self):
-        data = getattr(self, "_calls_breakdown_data", {}).get(self._bd_team)
-        if not data:
-            self._bd_status.setText("Nothing to export yet — click Load first.")
-            return
-        calls = self._filtered_calls()
-        if not calls:
-            self._bd_status.setText(
-                "No calls match the current filters — nothing to export.")
-            return
-        from PyQt6.QtWidgets import QFileDialog
-        import datetime
-        default_name = (f"{self._bd_team.replace(' ', '_')}_calls_"
-                        f"{datetime.date.today().isoformat()}.xlsx")
-        path, _ = QFileDialog.getSaveFileName(
-            self, "Export calls breakdown", default_name, "Excel files (*.xlsx)")
-        if not path:
-            return
-        try:
-            self._write_breakdown_xlsx(path, calls)
-            self._bd_status.setText(
-                f"Exported {len(calls)} rows to {path}")
-        except Exception as e:
-            self._bd_status.setText(f"Export failed: {e}")
-
-    def _write_breakdown_xlsx(self, path, calls):
-        import openpyxl
-        from openpyxl.styles import Font
-        wb = openpyxl.Workbook()
-        ws = wb.active
-        ws.title = "Calls"
-        ws.append(["Request Number", "Store Code", "Till Number", "Odd/Even", "Format"])
-        for c in ws[1]:
-            c.font = Font(bold=True, name="Arial")
-        for call in calls:
-            ws.append([
-                call["request_id"],
-                call["store_code"],
-                call["till_number"] if call["till_number"] is not None else "",
-                call["parity"],
-                call["format"],
-            ])
-        for row in ws.iter_rows(min_row=2):
-            for cell in row:
-                cell.font = Font(name="Arial")
-        for i, w in enumerate([16, 12, 12, 10, 12], start=1):
-            ws.column_dimensions[chr(64 + i)].width = w
-        wb.save(path)
 
     def _style_period_btns(self):
         if not hasattr(self, "_period_btns"):
@@ -1758,130 +1259,6 @@ class TeamAnalyticsWindow(QWidget):
         for pk in ("today", "week", "month"):
             if pk != self._period:
                 self._spawn_worker(pk, primary=False)
-        self._fetch_open_counts()
-
-    def _fetch_open_counts(self):
-        """Fetch the live open-request count per team (lightweight, its own
-        thread so it never blocks the main analytics render)."""
-        from PyQt6.QtCore import QThread, pyqtSignal
-
-        class _OpenWorker(QThread):
-            done = pyqtSignal(dict)
-            error = pyqtSignal(str)
-            def __init__(self, token, account):
-                super().__init__(); self.token = token; self.account = account
-            def run(self):
-                try:
-                    from src.widgets.xurrent_client import fetch_open_counts
-                    self.done.emit(fetch_open_counts(self.token, self.account))
-                except Exception as e:
-                    self.error.emit(str(e))
-
-        if getattr(self, "_open_worker", None) and self._open_worker.isRunning():
-            return
-        self._open_worker = _OpenWorker(self._token, self._account)
-        self._open_worker.done.connect(self._on_open_counts)
-        self._open_worker.error.connect(self._on_open_error)
-        self._open_worker.start()
-
-    def _on_open_error(self, msg):
-        """
-        Surface the real error instead of leaving the badges blank forever.
-        Previously this was silently swallowed, which made a broken open-count
-        query indistinguishable from 'still loading' — showing the actual
-        message (truncated) makes it diagnosable.
-        """
-        short = (msg[:40] + "…") if len(msg) > 40 else msg
-        for lbl in (getattr(self, "_open_sup", None), getattr(self, "_open_eft", None)):
-            if lbl:
-                lbl.setText("!")
-                lbl.setToolTip(f"Couldn't load open-call count:\n{msg}")
-        if hasattr(self, "_status"):
-            self._status.setText(f"open-count error: {short}")
-
-    def _toggle_open_breakdown(self, team_key):
-        panel, _ = self._open_breakdown_panels[team_key]
-        expanded = not self._open_expanded[team_key]
-        self._open_expanded[team_key] = expanded
-        chev = self._open_sup_chev if team_key == "POS Support" else self._open_eft_chev
-        chev.setText("▴" if expanded else "▾")
-        panel.setVisible(expanded)
-        if expanded:
-            self._render_open_breakdown(team_key)
-
-    def _add_breakdown_row(self, layout, label, count, value_color):
-        row_w = QWidget()
-        row = QHBoxLayout(row_w)
-        row.setContentsMargins(0, 0, 0, 0); row.setSpacing(8)
-        lbl = QLabel(label)
-        lbl.setStyleSheet(
-            "background:transparent;color:#a7b6c8;font-size:11px;border:none;")
-        val = QLabel(str(count))
-        val.setStyleSheet(
-            f"background:transparent;color:{value_color};font-size:11px;"
-            f"font-weight:800;border:none;font-family:{MONO};")
-        row.addWidget(lbl); row.addStretch(); row.addWidget(val)
-        layout.addWidget(row_w)
-
-    def _render_open_breakdown(self, team_key):
-        panel, layout = self._open_breakdown_panels[team_key]
-        while layout.count():
-            item = layout.takeAt(0)
-            if item and item.widget():
-                item.widget().deleteLater()
-
-        data = self._open_breakdown_data.get(team_key)
-        if not data:
-            empty = QLabel("No breakdown yet — refreshing…")
-            empty.setStyleSheet(
-                "background:transparent;color:#6d84a0;font-size:10px;border:none;")
-            layout.addWidget(empty)
-            return
-
-        breakdown = data.get("breakdown", {})
-        color = TEAM_COLORS[team_key]
-        any_rows = False
-        for status in STATUS_ORDER:
-            bucket = breakdown.get(status, {"member": 0, "unclaimed": 0})
-            member_n = bucket.get("member", 0)
-            unclaimed_n = bucket.get("unclaimed", 0)
-            if member_n == 0 and unclaimed_n == 0:
-                continue
-            any_rows = True
-            label = STATUS_LABELS[status]
-            # Only split into two rows when this status actually has BOTH
-            # member-assigned and unclaimed requests in the real data — a
-            # status that's uniformly one or the other just gets one row.
-            if member_n > 0:
-                any_rows = True
-                self._add_breakdown_row(layout, label, member_n, color)
-            if unclaimed_n > 0:
-                any_rows = True
-                # Amber-tinted: unclaimed work needs someone to pick it up.
-                self._add_breakdown_row(
-                    layout, f"{label} (Unclaimed)", unclaimed_n, "#fbbf24")
-
-        if not any_rows:
-            empty = QLabel("Nothing open right now.")
-            empty.setStyleSheet(
-                "background:transparent;color:#6d84a0;font-size:10px;border:none;")
-            layout.addWidget(empty)
-
-    def _on_open_counts(self, counts):
-        """counts = {team_name: {"total": int, "breakdown": {...}}} — exact,
-        fully paginated (see fetch_open_counts)."""
-        for team_key, lbl in (("POS Support", getattr(self, "_open_sup", None)),
-                              ("POS EFT", getattr(self, "_open_eft", None))):
-            if not lbl:
-                continue
-            data = counts.get(team_key)
-            if data is None:
-                continue
-            self._open_breakdown_data[team_key] = data
-            lbl.setText(str(data.get("total", "—")))
-            lbl.setToolTip("")
-            if self._open_expanded.get(team_key):
-                self._render_open_breakdown(team_key)
 
     def _spawn_worker(self, period, primary):
         if not hasattr(self, "_workers"):

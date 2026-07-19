@@ -35,19 +35,6 @@ class CommandTag(QPushButton):
         self._border_col = QColor(border)
         self.update()
 
-    def sizeHint(self):
-        """
-        Size to the tag's own text, not a fixed/stretched column width —
-        this is what makes the grid flow naturally (like a tag cloud)
-        instead of every button being force-stretched to match the widest
-        one in a rigid grid column.
-        """
-        from PyQt6.QtCore import QSize
-        fm = self.fontMetrics()
-        text_w = fm.horizontalAdvance(self.text())
-        cap_w = 7
-        return QSize(text_w + cap_w + 34, self.height() if self.height() > 0 else 38)
-
     def enterEvent(self, e):
         self._hover = True
         self.update()
@@ -79,7 +66,7 @@ class CommandTag(QPushButton):
         inset = 2 if self._pressed else 0
         rect = QRectF(r.x() + inset, r.y() + inset,
                        r.width() - inset * 2, r.height() - inset * 2)
-        radius = 10.0   # HTML: .cmd { border-radius:10px } — literal, fixed
+        radius = min(10.0, rect.height() * 0.32)
 
         path = QPainterPath()
         path.addRoundedRect(rect, radius, radius)
@@ -105,7 +92,7 @@ class CommandTag(QPushButton):
         # The cap — a solid colour block fused to the left edge, rounded to
         # match the pill's own corners. This is the button's identity mark;
         # replaces a floating dot with real structural weight.
-        cap_w = 7.0   # HTML: .cmd .cap { width:7px } — literal, fixed
+        cap_w = max(6.0, rect.height() * 0.18)
         cap_path = QPainterPath()
         cap_full = QRectF(rect.left(), rect.top(), cap_w + radius, rect.height())
         cap_path.addRoundedRect(cap_full, radius, radius)
